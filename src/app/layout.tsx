@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Outfit } from "next/font/google";
 import Script from "next/script";
 import "./globals.css";
+import { ThemeProvider } from "@/components/ThemeProvider";
 
 const outfit = Outfit({
   subsets: ["latin", "latin-ext"],
@@ -27,9 +28,10 @@ export default function RootLayout({
     <html
       lang="ko"
       className={`${outfit.variable} dark h-full antialiased`}
+      suppressHydrationWarning
     >
       <body className="min-h-full flex flex-col">
-        {children}
+        <ThemeProvider>{children}</ThemeProvider>
         <Script
           src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.0/kakao.min.js"
           integrity="sha384-l68m7Z3oK1cM0Xizv8xGvX74Y6G7W7xY8G7W7xY8G7W7xY8G7W7xY8G7W7xY8G7"

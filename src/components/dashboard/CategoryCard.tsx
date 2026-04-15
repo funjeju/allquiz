@@ -8,13 +8,15 @@ interface CategoryCardProps {
   count: number;
   icon: React.ReactNode;
   active?: boolean;
+  onClick?: () => void;
 }
 
-export function CategoryCard({ category, count, icon, active }: CategoryCardProps) {
+export function CategoryCard({ category, count, icon, active, onClick }: CategoryCardProps) {
   return (
     <motion.div
       whileHover={{ y: -5, scale: 1.02 }}
       whileTap={{ scale: 0.98 }}
+      onClick={onClick}
       className={`relative overflow-hidden cursor-pointer group p-6 rounded-3xl border ${
         active 
           ? "bg-primary/10 border-primary shadow-[0_0_30px_rgba(168,85,247,0.15)]" 

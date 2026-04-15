@@ -30,14 +30,18 @@ const SYSTEM_PROMPT = `
 }
 `;
 
-export async function generateQuizFromNews(category: string, newsItem: any): Promise<QuizGenerationOutput | null> {
+export async function generateQuizFromText(category: string, text: string, sourceUrl: string, title?: string): Promise<QuizGenerationOutput | null> {
+  const safeText = (text || "").slice(0, 3000);
+
   const prompt = `
   카테고리: ${category}
-  기사 제목: ${newsItem.title}
-  기사 요약: ${newsItem.content}
-  기사 링크: ${newsItem.link}
+  출처: ${sourceUrl}
+  ${title ? `핵심 제목: ${title}` : ""}
 
-  위 정보를 바탕으로 퀴즈를 생성해줘. JSON으로만 대답해.
+  [분석 내용]
+  ${safeText || "제목 정보만 있습니다. 제목을 바탕으로 퀴즈를 생성해주세요."}
+
+  위 내용을 바탕으로 'Rank & Quiz' 고퀄리티 퀴즈(Teen/Adult용 각 1개)를 생성해줘. JSON으로만 대답해.
   `;
 
   try {
@@ -46,23 +50,27 @@ export async function generateQuizFromNews(category: string, newsItem: any): Pro
       { text: prompt }
     ]);
     const response = await result.response;
-    const text = response.text();
+    const responseText = response.text();
     
-    // JSON 추출 (Gemini가 마크다운 블록에 가끔 넣는 경우 대비)
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error("No JSON found in response");
     
     const parsed = JSON.parse(jsonMatch[0]);
     
-    // Zod 검증
     return QuizGenerationOutputSchema.parse({
       ...parsed,
       category,
-      source_url: newsItem.link,
-      base_fact: newsItem.title
+      source_url: sourceUrl,
+      base_fact: title || parsed.base_fact || category
     });
   } catch (error) {
-    console.error(`AI Quiz Generation Error [${category}]:`, error);
+    console.error(`AI General Generation Error [${category}]:`, error);
     return null;
   }
+}
+
+export async function generateQuizFromNews(category: string, newsItem: any): Promise<QuizGenerationOutput | null> {
+  // Google News RSS는 본문을 제공하지 않으므로 title을 content 대신 사용
+  const content = newsItem.content || newsItem.contentSnippet || newsItem.title || "";
+  return generateQuizFromText(category, content, newsItem.link, newsItem.title);
 }
