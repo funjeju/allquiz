@@ -7,6 +7,7 @@ import { getDailyQuiz20 } from "@/services/quizService";
 import { QuizGenerationOutput } from "@/lib/schemas";
 import { motion } from "framer-motion";
 import { Trophy, Zap, Home, CheckCircle2, XCircle, Calendar, ExternalLink, BookOpen, ChevronDown, ChevronUp } from "lucide-react";
+import { ReportButton } from "@/components/ReportModal";
 
 type QuizItem = { quiz: QuizGenerationOutput; category: string };
 
@@ -350,9 +351,9 @@ export default function DailyQuizPage() {
             )}
           </div>
 
-          {/* 출처 */}
-          {currentItem.quiz.source_url && (
-            <div className="mb-4 px-2">
+          {/* 출처 + 신고 */}
+          <div className="mb-4 px-2 flex items-center justify-between gap-2">
+            {currentItem.quiz.source_url ? (
               <a
                 href={currentItem.quiz.source_url}
                 target="_blank"
@@ -362,8 +363,15 @@ export default function DailyQuizPage() {
                 <ExternalLink className="w-3 h-3 shrink-0" />
                 {currentItem.quiz.base_fact}
               </a>
-            </div>
-          )}
+            ) : <span />}
+            <ReportButton
+              date={new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date())}
+              category={currentItem.category}
+              baseFact={currentItem.quiz.base_fact}
+              sourceUrl={currentItem.quiz.source_url || ""}
+              question={currentQuiz.question}
+            />
+          </div>
 
           {/* 선택지 */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

@@ -11,6 +11,7 @@ import {
   CheckCircle2, XCircle, ExternalLink, BookOpen,
   ChevronDown, ChevronUp,
 } from "lucide-react";
+import { ReportButton } from "@/components/ReportModal";
 
 const CATEGORY_LABELS: Record<string, string> = {
   NATION: "시사/종합", WORLD: "국제뉴스", IT: "IT/테크", AI: "인공지능",
@@ -332,16 +333,23 @@ export default function QuizPlayPage() {
             )}
           </div>
 
-          {/* 출처 */}
-          {currentItem.source_url && (
-            <div className="mb-4 px-2">
+          {/* 출처 + 신고 */}
+          <div className="mb-4 px-2 flex items-center justify-between gap-2">
+            {currentItem.source_url ? (
               <a href={currentItem.source_url} target="_blank" rel="noopener noreferrer"
                 className="text-[10px] text-muted-foreground hover:text-primary flex items-center gap-1 font-bold truncate">
                 <ExternalLink className="w-3 h-3 shrink-0" />
                 {currentItem.base_fact}
               </a>
-            </div>
-          )}
+            ) : <span />}
+            <ReportButton
+              date={new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date())}
+              category={category as string}
+              baseFact={currentItem.base_fact}
+              sourceUrl={currentItem.source_url || ""}
+              question={currentQuiz.question}
+            />
+          </div>
 
           {/* 선택지 */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

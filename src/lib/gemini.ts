@@ -10,9 +10,16 @@ const ai = new GoogleGenAI({
 });
 
 const MODEL = "gemini-2.5-flash";
-// thinking 비활성화 — 퀴즈 생성처럼 속도가 중요한 작업에서 불필요한 추론 제거
-const GENERATION_CONFIG = {
+
+// 기본 설정 (thinking 비활성화 — 속도 우선)
+const BASE_CONFIG = {
   thinkingConfig: { thinkingBudget: 0 },
+};
+
+// Google Search Grounding 포함 설정 — 최신 정보 실시간 검색
+const GROUNDED_CONFIG = {
+  thinkingConfig: { thinkingBudget: 0 },
+  tools: [{ googleSearch: {} }],
 };
 
 export const geminiModel = {
@@ -20,7 +27,20 @@ export const geminiModel = {
     const response = await ai.models.generateContent({
       model: MODEL,
       contents: [{ role: "user", parts }],
-      config: GENERATION_CONFIG,
+      config: BASE_CONFIG,
+    });
+    return {
+      response: {
+        text: () => response.text ?? "",
+      },
+    };
+  },
+  // 실시간 Google 검색 grounding 포함 버전
+  generateContentGrounded: async (parts: { text: string }[]) => {
+    const response = await ai.models.generateContent({
+      model: MODEL,
+      contents: [{ role: "user", parts }],
+      config: GROUNDED_CONFIG,
     });
     return {
       response: {
@@ -35,7 +55,7 @@ export async function generateContent(prompt: string) {
     const response = await ai.models.generateContent({
       model: MODEL,
       contents: [{ role: "user", parts: [{ text: prompt }] }],
-      config: GENERATION_CONFIG,
+      config: BASE_CONFIG,
     });
     return response.text ?? "";
   } catch (error) {
