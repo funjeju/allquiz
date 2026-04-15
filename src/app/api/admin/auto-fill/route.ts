@@ -12,10 +12,8 @@ const CATEGORIES: NewsCategory[] = [
   "IT", "AI", "POLITICS", "TRAVEL", "PERSON", "JEJU", "REGION"
 ];
 
-// 동시에 처리할 카테고리 수 (rate limit 고려)
-const CATEGORY_CONCURRENCY = 3;
-// 카테고리 내 동시 퀴즈 생성 수
-const ITEM_CONCURRENCY = 3;
+const CATEGORY_CONCURRENCY = 3; // 동시 처리 카테고리 수
+const HALF_SIZE = 5;             // 카테고리 내 5+5 동시 실행
 
 async function processCategory(
   cat: NewsCategory,
@@ -35,22 +33,23 @@ async function processCategory(
 
     console.log(`[Auto-Fill] ${cat}: gap=${gap}, fetched=${allNews.length}, fresh=${freshNews.length}, target=${targetNews.length}`);
 
-    // 카테고리 내 아이템을 ITEM_CONCURRENCY 단위로 병렬 처리
-    let filled = 0;
-    for (let i = 0; i < targetNews.length; i += ITEM_CONCURRENCY) {
-      const batch = targetNews.slice(i, i + ITEM_CONCURRENCY);
-      const batchResults = await Promise.allSettled(
-        batch.map(async (news) => {
+    // 카테고리 내 10문제를 5+5로 쪼개서 두 그룹 동시 실행
+    const processGroup = async (items: typeof targetNews) => {
+      const res = await Promise.allSettled(
+        items.map(async (news) => {
           const quiz = await generateQuizFromNews(cat, news);
-          if (quiz) {
-            await saveQuizToFirestore(quiz);
-            return true;
-          }
+          if (quiz) { await saveQuizToFirestore(quiz); return true; }
           return false;
         })
       );
-      filled += batchResults.filter(r => r.status === "fulfilled" && r.value).length;
-    }
+      return res.filter(r => r.status === "fulfilled" && r.value).length;
+    };
+
+    const [count1, count2] = await Promise.all([
+      processGroup(targetNews.slice(0, HALF_SIZE)),
+      processGroup(targetNews.slice(HALF_SIZE)),
+    ]);
+    const filled = count1 + count2;
 
     return { category: cat, status: "filled", gap_filled: filled, total_now: currentCount + filled };
   } catch (e: any) {

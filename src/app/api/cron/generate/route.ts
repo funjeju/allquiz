@@ -11,8 +11,8 @@ const CATEGORIES: NewsCategory[] = [
   "NATION", "WORLD", "SPORTS", "ENTERTAINMENT", "KPOP",
   "IT", "AI", "POLITICS", "TRAVEL", "PERSON", "JEJU", "REGION"
 ];
-const CATEGORY_CONCURRENCY = 3;
-const ITEM_CONCURRENCY = 3;
+const CATEGORY_CONCURRENCY = 3; // 동시 처리 카테고리 수
+const HALF_SIZE = 5;             // 카테고리 내 절반 단위 (5+5 동시 실행)
 
 export async function GET(req: NextRequest) {
   // Vercel Cron은 Authorization 헤더로 CRON_SECRET을 자동 전송
@@ -44,9 +44,8 @@ export async function GET(req: NextRequest) {
 
           console.log(`[Cron] ${cat}: gap=${gap}, fresh=${freshNews.length}, target=${targetNews.length}`);
 
-          let filled = 0;
-          for (let j = 0; j < targetNews.length; j += ITEM_CONCURRENCY) {
-            const items = targetNews.slice(j, j + ITEM_CONCURRENCY);
+          // 카테고리 내 10문제를 5+5로 쪼개서 두 그룹 동시 실행
+          const processGroup = async (items: typeof targetNews) => {
             const res = await Promise.allSettled(
               items.map(async (news) => {
                 const quiz = await generateQuizFromNews(cat, news);
@@ -54,8 +53,17 @@ export async function GET(req: NextRequest) {
                 return false;
               })
             );
-            filled += res.filter(r => r.status === "fulfilled" && r.value).length;
-          }
+            return res.filter(r => r.status === "fulfilled" && r.value).length;
+          };
+
+          const firstHalf = targetNews.slice(0, HALF_SIZE);
+          const secondHalf = targetNews.slice(HALF_SIZE);
+
+          const [count1, count2] = await Promise.all([
+            processGroup(firstHalf),
+            processGroup(secondHalf),
+          ]);
+          const filled = count1 + count2;
 
           return { category: cat, status: "filled", filled, total: (currentCounts[cat] || 0) + filled };
         })
