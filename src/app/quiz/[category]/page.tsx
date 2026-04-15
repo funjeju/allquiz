@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { QuizGenerationOutput } from "@/lib/schemas";
 import { getQuizzesByCategory } from "@/services/quizService";
+import { saveQuizResult, calcPoints } from "@/services/scoreService";
 import { motion } from "framer-motion";
 import {
   Trophy, AlertCircle, Home, Share2, Zap,
@@ -25,7 +26,7 @@ type GameState = "READY" | "PLAYING" | "FEEDBACK" | "RESULT" | "REVIEW";
 export default function QuizPlayPage() {
   const { category } = useParams();
   const router = useRouter();
-  const { profile } = useAuth();
+  const { user, profile } = useAuth();
 
   const [questions, setQuestions] = useState<QuizGenerationOutput[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,6 +40,7 @@ export default function QuizPlayPage() {
 
   const currentRef = useRef(0);
   const questionsRef = useRef<QuizGenerationOutput[]>([]);
+  const scoreRef = useRef(0);
 
   useEffect(() => {
     getQuizzesByCategory(category as string).then(data => {
@@ -61,13 +63,30 @@ export default function QuizPlayPage() {
 
     setSelectedOption(option);
     setIsCorrect(correct);
-    if (correct) setScore(s => s + 1);
+    if (correct) { setScore(s => { scoreRef.current = s + 1; return s + 1; }); }
     setAnswers(prev => [...prev, { correct, selected: option }]);
     setGameState("FEEDBACK");
 
     setTimeout(() => {
       const nextIdx = currentRef.current + 1;
       if (nextIdx >= questionsRef.current.length) {
+        const finalScore = scoreRef.current;
+        const total = questionsRef.current.length;
+        if (user && profile) {
+          const kstDate = new Intl.DateTimeFormat("en-CA", {
+            timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit",
+          }).format(new Date());
+          saveQuizResult({
+            uid: user.uid,
+            nickname: profile.nickname,
+            date: kstDate,
+            category: category as string,
+            score: finalScore,
+            total,
+            pct: Math.round((finalScore / total) * 100),
+            points_earned: calcPoints(finalScore, total),
+          });
+        }
         setGameState("RESULT");
       } else {
         currentRef.current = nextIdx;
@@ -333,9 +352,9 @@ export default function QuizPlayPage() {
             )}
           </div>
 
-          {/* 출처 + 신고 */}
+          {/* 출처: 답 선택 후(FEEDBACK)에만 표시 — 힌트 방지 */}
           <div className="mb-4 px-2 flex items-center justify-between gap-2">
-            {currentItem.source_url ? (
+            {gameState === "FEEDBACK" && currentItem.source_url ? (
               <a href={currentItem.source_url} target="_blank" rel="noopener noreferrer"
                 className="text-[10px] text-muted-foreground hover:text-primary flex items-center gap-1 font-bold truncate">
                 <ExternalLink className="w-3 h-3 shrink-0" />

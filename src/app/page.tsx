@@ -139,6 +139,12 @@ export default function Dashboard() {
                     <p className="text-sm font-bold truncate">{profile?.nickname}</p>
                   </div>
                   <button
+                    onClick={() => { setMenuOpen(false); router.push("/me"); }}
+                    className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-bold hover:bg-muted/50 transition-colors"
+                  >
+                    <Trophy className="w-4 h-4 text-secondary" /> 나의 기록
+                  </button>
+                  <button
                     onClick={() => { setMenuOpen(false); logout(); }}
                     className="w-full flex items-center gap-2 px-4 py-2.5 text-sm font-bold text-destructive hover:bg-destructive/5 transition-colors"
                   >
