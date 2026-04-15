@@ -48,8 +48,8 @@ export default function QuizPlayPage() {
   }, [category]);
 
   const getTargetQuiz = (q: QuizGenerationOutput) => {
-    const age = new Date().getFullYear() - (profile?.demographics?.birth_year || 2000);
-    return age < 20 ? q.quizzes.teen : q.quizzes.adult;
+    const isTeen = profile?.demographics?.age_range === "10대";
+    return isTeen ? q.quizzes.teen : q.quizzes.adult;
   };
 
   const handleAnswer = (option: string) => {

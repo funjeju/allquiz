@@ -53,8 +53,8 @@ export default function DailyQuizPage() {
   }, []);
 
   const getQuiz = (item: QuizItem) => {
-    const age = new Date().getFullYear() - (profile?.demographics?.birth_year || 2000);
-    return age < 20 ? item.quiz.quizzes.teen : item.quiz.quizzes.adult;
+    const isTeen = profile?.demographics?.age_range === "10대";
+    return isTeen ? item.quiz.quizzes.teen : item.quiz.quizzes.adult;
   };
 
   const handleAnswer = (option: string) => {

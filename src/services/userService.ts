@@ -2,9 +2,10 @@ import { db } from "@/lib/firebase";
 import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 
 export interface UserDemographics {
-  birth_year: number;
+  age_range: string;   // "10대" | "20대" | "30대" | "40대" | "50대" | "60대+"
   region: string;
   gender: string;
+  interests: string[]; // category IDs
 }
 
 export interface UserProfile {
@@ -54,3 +55,4 @@ export async function updateUserDemographics(uid: string, demographics: UserDemo
     updated_at: new Date().toISOString(),
   });
 }
+
