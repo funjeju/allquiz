@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { getDailyQuiz20, getDailyQuizByDate } from "@/services/quizService";
@@ -38,7 +38,7 @@ function getKSTDate() {
 
 type GameState = "READY" | "PLAYING" | "FEEDBACK" | "RESULT" | "REVIEW";
 
-export default function DailyQuizPage() {
+function DailyQuizPageInner() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { user, profile } = useAuth();
@@ -489,5 +489,17 @@ export default function DailyQuizPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function DailyQuizPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background gap-4">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary" />
+      </div>
+    }>
+      <DailyQuizPageInner />
+    </Suspense>
   );
 }

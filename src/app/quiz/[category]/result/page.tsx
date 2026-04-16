@@ -1,11 +1,12 @@
 "use client";
 
+import { Suspense } from "react";
 import { useSearchParams, useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useKakaoShare } from "@/hooks/useKakaoShare";
 import { Trophy, Share2, Home, RotateCcw, Crown, AlertTriangle } from "lucide-react";
 
-export default function QuizResult() {
+function QuizResultInner() {
   const searchParams = useSearchParams();
   const { category } = useParams();
   const router = useRouter();
@@ -115,5 +116,17 @@ export default function QuizResult() {
         공유를 통해 '골든 티켓'을 획득하고 틀린그림찾기에 도전하세요!
       </div>
     </div>
+  );
+}
+
+export default function QuizResult() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary" />
+      </div>
+    }>
+      <QuizResultInner />
+    </Suspense>
   );
 }

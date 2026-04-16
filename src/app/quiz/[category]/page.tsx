@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, Suspense } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { QuizGenerationOutput } from "@/lib/schemas";
@@ -23,7 +23,7 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 type GameState = "READY" | "PLAYING" | "FEEDBACK" | "RESULT" | "REVIEW";
 
-export default function QuizPlayPage() {
+function QuizPlayPageInner() {
   const { category } = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -416,5 +416,17 @@ export default function QuizPlayPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function QuizPlayPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary" />
+      </div>
+    }>
+      <QuizPlayPageInner />
+    </Suspense>
   );
 }
