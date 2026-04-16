@@ -25,17 +25,27 @@ const CATEGORY_MAP: Record<string, string> = {
   AI: `https://news.google.com/rss/search?q=${encodeURIComponent("인공지능")}&hl=ko&gl=KR&ceid=KR:ko`,
   TRAVEL: `https://news.google.com/rss/search?q=${encodeURIComponent("여행")}&hl=ko&gl=KR&ceid=KR:ko`,
   PERSON: `https://news.google.com/rss/search?q=${encodeURIComponent("인물")}&hl=ko&gl=KR&ceid=KR:ko`,
-  JEJU: `https://news.google.com/rss/search?q=${encodeURIComponent("제주")}&hl=ko&gl=KR&ceid=KR:ko`,
+  JEJU: `https://news.google.com/rss/search?q=${encodeURIComponent("제주도 OR 제주시 OR 서귀포 OR 제주관광 OR 제주행정")}&hl=ko&gl=KR&ceid=KR:ko`,
 };
 
 const REGIONS = ["서울", "부산", "인천", "대구", "광주", "대전", "울산"];
 
 import { format, subDays, isSameDay } from "date-fns";
 
+// 카테고리별 날짜 범위 (일수) — 기사량이 적은 카테고리는 범위를 넓힘
+const CATEGORY_DATE_RANGE: Partial<Record<NewsCategory, number>> = {
+  JEJU: 3,
+  REGION: 3,
+  PERSON: 2,
+  TRAVEL: 2,
+};
+
 export async function fetchNewsByCategory(category: NewsCategory, targetDate?: Date) {
   let url = CATEGORY_MAP[category];
   const searchDate = targetDate || subDays(new Date(), 1); // 기본값 어제
-  const dateStr = format(searchDate, "yyyy-MM-dd");
+  const rangeDays = CATEGORY_DATE_RANGE[category] ?? 1;
+  const fromDate = subDays(searchDate, rangeDays - 1);
+  const dateStr = format(fromDate, "yyyy-MM-dd");
   const tomorrowStr = format(new Date(searchDate.getTime() + 86400000), "yyyy-MM-dd");
 
   if (category === "REGION") {

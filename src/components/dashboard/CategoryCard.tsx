@@ -9,9 +9,10 @@ interface CategoryCardProps {
   icon: React.ReactNode;
   active?: boolean;
   onClick?: () => void;
+  hot?: boolean;
 }
 
-export function CategoryCard({ category, count, icon, active, onClick }: CategoryCardProps) {
+export function CategoryCard({ category, count, icon, active, onClick, hot }: CategoryCardProps) {
   return (
     <motion.div
       whileHover={{ y: -5, scale: 1.02 }}
@@ -30,16 +31,18 @@ export function CategoryCard({ category, count, icon, active, onClick }: Categor
         <div className={`p-3 rounded-2xl ${active ? "bg-primary text-white" : "bg-muted text-muted-foreground group-hover:text-primary transition-colors"}`}>
           {icon}
         </div>
-        <div className="flex items-center gap-1 text-xs font-medium text-accent">
-          <Zap className="w-3 h-3 fill-accent" />
-          HOT
-        </div>
+        {hot && (
+          <div className="flex items-center gap-1 text-xs font-medium text-accent">
+            <Zap className="w-3 h-3 fill-accent" />
+            HOT
+          </div>
+        )}
       </div>
 
       <h3 className="text-xl font-bold mb-1">{category}</h3>
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <Users className="w-4 h-4" />
-        {count.toLocaleString()}명이 대결 중
+        {count > 0 ? `${count.toLocaleString()}문제 준비됨` : "오늘 준비 중"}
       </div>
 
       {/* Battle Button */}

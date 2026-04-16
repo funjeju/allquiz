@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { logout } from "@/services/authService";
 import { getCategoryCounts, getTodayQuizSummary } from "@/services/quizService";
+import { subscribeDailyBattle, BattleScore } from "@/services/scoreService";
 import { useState, useEffect, useRef } from "react";
 import { useTheme } from "@/components/ThemeProvider";
 
@@ -20,6 +21,7 @@ export default function Dashboard() {
   const { theme, toggleTheme } = useTheme();
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [quizSummary, setQuizSummary] = useState<{ date: string; totalCount: number; categoryCount: number } | null>(null);
+  const [battleScores, setBattleScores] = useState<BattleScore[]>([]);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -40,6 +42,12 @@ export default function Dashboard() {
       if (summary.totalCount > 0) setQuizSummary(summary);
     };
     fetchCounts();
+
+    const kstDate = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit",
+    }).format(new Date());
+    const unsub = subscribeDailyBattle(kstDate, setBattleScores);
+    return () => unsub();
   }, []);
 
   // 메뉴 외부 클릭 시 닫기
@@ -249,41 +257,66 @@ export default function Dashboard() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {CATEGORIES.map((cat, idx) => (
+          {CATEGORIES.map((cat) => (
             <CategoryCard
               key={cat.id}
               category={cat.name}
               count={cat.count}
               icon={cat.icon}
-              active={idx === 2}
+              active={cat.count > 0}
+              hot={cat.count >= 8}
               onClick={() => handleStartQuiz(cat.id)}
             />
           ))}
         </div>
       </section>
 
-      {/* Mini Ranking Footer */}
+      {/* 실시간 배틀 랭킹 */}
       <section className="bg-muted/50 rounded-3xl p-6 border border-border/50">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-bold flex items-center gap-2">
             <Trophy className="w-5 h-5 text-secondary" />
             실시간 인기 배틀
           </h3>
+          <span className="text-xs font-bold text-muted-foreground">
+            {battleScores.length > 0 ? `${battleScores.length}명 참여 중` : "오늘 첫 참여자를 기다리는 중"}
+          </span>
         </div>
-        <div className="space-y-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="flex items-center justify-between bg-card p-3 rounded-2xl border border-border/40">
-              <div className="flex items-center gap-3">
-                <span className="text-lg font-black text-muted-foreground/30 w-6">0{i}</span>
-                <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-muted to-border flex items-center justify-center font-bold text-xs uppercase">
-                  USER
+
+        {battleScores.length === 0 ? (
+          <div className="text-center py-6 text-muted-foreground">
+            <p className="font-bold text-sm">아직 오늘의 참여자가 없습니다</p>
+            <p className="text-xs mt-1">데일리 퀴즈를 풀면 여기에 표시됩니다</p>
+            <button
+              onClick={handleDailyQuiz}
+              className="mt-4 bg-primary text-white px-5 py-2 rounded-2xl text-sm font-black"
+            >
+              지금 도전하기
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {battleScores.slice(0, 5).map((s, i) => {
+              const isMe = user && s.uid === user.uid;
+              const rankColor = i === 0 ? "text-yellow-400" : i === 1 ? "text-gray-400" : i === 2 ? "text-amber-600" : "text-muted-foreground/40";
+              return (
+                <div key={s.uid} className={`flex items-center justify-between p-3 rounded-2xl border ${isMe ? "bg-primary/10 border-primary/30" : "bg-card border-border/40"}`}>
+                  <div className="flex items-center gap-3">
+                    <span className={`text-lg font-black w-6 ${rankColor}`}>{i + 1}</span>
+                    <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-primary/20 to-primary/5 border border-primary/20 flex items-center justify-center font-black text-sm text-primary uppercase">
+                      {s.nickname?.[0] || "U"}
+                    </div>
+                    <span className="font-bold text-sm">{isMe ? `${s.nickname} (나)` : s.nickname}</span>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-primary font-black text-sm">{s.score}/{s.total}</p>
+                    <p className="text-xs text-muted-foreground">{s.pct}%</p>
+                  </div>
                 </div>
-                <span className="font-bold text-sm text-foreground/80">익명의 마스터</span>
-              </div>
-              <span className="text-primary font-black text-sm">2,450 pts</span>
-            </div>
-          ))}
-        </div>
+              );
+            })}
+          </div>
+        )}
       </section>
     </main>
   );
