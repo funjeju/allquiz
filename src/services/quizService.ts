@@ -2,6 +2,114 @@ import { db } from "@/lib/firebase";
 import { doc, setDoc, updateDoc, arrayUnion, getDoc } from "firebase/firestore";
 import { QuizGenerationOutput } from "@/lib/schemas";
 
+// ─── 주기별 퀴즈 키 계산 ────────────────────────────────────────────────────
+
+// KST 기준 현재 시각을 Date로 반환
+function getKSTNow() {
+  return new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
+}
+
+// 지난 완료된 주의 월요일 날짜 "YYYY-MM-DD" 반환
+export function getWeeklyQuizKey(): string {
+  const now = getKSTNow();
+  const dow = now.getDay(); // 0=Sun, 1=Mon..6=Sat
+  const daysSinceMonday = dow === 0 ? 6 : dow - 1;
+  const lastMonday = new Date(now);
+  lastMonday.setDate(now.getDate() - daysSinceMonday - 7);
+  return new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit" }).format(lastMonday);
+}
+
+// 지난달 키 "YYYY-MM" 반환
+export function getMonthlyQuizKey(): string {
+  const now = getKSTNow();
+  const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const str = new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit" }).format(prev);
+  return str.slice(0, 7); // "YYYY-MM"
+}
+
+// 월요일 기준 7일치 날짜 배열 반환
+function getWeekDates(mondayKey: string): string[] {
+  const monday = new Date(mondayKey + "T00:00:00");
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    return new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+  });
+}
+
+// 해당 월의 전체 날짜 배열 반환
+function getMonthDates(monthKey: string): string[] {
+  const [y, m] = monthKey.split("-").map(Number);
+  const daysInMonth = new Date(y, m, 0).getDate();
+  return Array.from({ length: daysInMonth }, (_, i) => {
+    const d = new Date(y, m - 1, i + 1);
+    return new Intl.DateTimeFormat("en-CA", { year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+  });
+}
+
+// 위클리 퀴즈 생성 & Firestore 저장
+export async function generateAndSaveWeeklyQuiz(): Promise<{ count: number; key: string }> {
+  const weekKey = getWeeklyQuizKey();
+  const dates = getWeekDates(weekKey);
+  const all = await getQuizzesFromDates(dates);
+  const shuffled = seededShuffle(all, weekKey);
+  const selected = shuffled.slice(0, 20);
+  await setDoc(doc(db, "periodic_quizzes", `weekly_${weekKey}`), {
+    type: "weekly",
+    key: weekKey,
+    from_date: dates[0],
+    to_date: dates[6],
+    quizzes: selected,
+    total_count: selected.length,
+    generated_at: new Date().toISOString(),
+  });
+  return { count: selected.length, key: weekKey };
+}
+
+// 먼슬리 퀴즈 생성 & Firestore 저장
+export async function generateAndSaveMonthlyQuiz(): Promise<{ count: number; key: string }> {
+  const monthKey = getMonthlyQuizKey();
+  const dates = getMonthDates(monthKey);
+  const all = await getQuizzesFromDates(dates);
+  const shuffled = seededShuffle(all, monthKey);
+  const selected = shuffled.slice(0, 20);
+  await setDoc(doc(db, "periodic_quizzes", `monthly_${monthKey}`), {
+    type: "monthly",
+    key: monthKey,
+    from_date: dates[0],
+    to_date: dates[dates.length - 1],
+    quizzes: selected,
+    total_count: selected.length,
+    generated_at: new Date().toISOString(),
+  });
+  return { count: selected.length, key: monthKey };
+}
+
+// 저장된 위클리 퀴즈 조회
+export async function getStoredWeeklyQuiz(): Promise<{ quiz: QuizGenerationOutput; category: string }[] | null> {
+  const weekKey = getWeeklyQuizKey();
+  const snap = await getDoc(doc(db, "periodic_quizzes", `weekly_${weekKey}`));
+  if (!snap.exists()) return null;
+  return snap.data().quizzes ?? null;
+}
+
+// 저장된 먼슬리 퀴즈 조회
+export async function getStoredMonthlyQuiz(): Promise<{ quiz: QuizGenerationOutput; category: string }[] | null> {
+  const monthKey = getMonthlyQuizKey();
+  const snap = await getDoc(doc(db, "periodic_quizzes", `monthly_${monthKey}`));
+  if (!snap.exists()) return null;
+  return snap.data().quizzes ?? null;
+}
+
+// 위클리/먼슬리 퀴즈 존재 여부 확인
+export async function checkPeriodicQuizExists(): Promise<{ weekly: boolean; monthly: boolean }> {
+  const [wSnap, mSnap] = await Promise.all([
+    getDoc(doc(db, "periodic_quizzes", `weekly_${getWeeklyQuizKey()}`)),
+    getDoc(doc(db, "periodic_quizzes", `monthly_${getMonthlyQuizKey()}`)),
+  ]);
+  return { weekly: wSnap.exists(), monthly: mSnap.exists() };
+}
+
 // KST 날짜 문자열 생성 함수 (전역 서버/클라이언트 시차 해결)
 function getKSTDate() {
   return new Intl.DateTimeFormat("en-CA", {

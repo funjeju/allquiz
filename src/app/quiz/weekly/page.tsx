@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
-import { getWeeklyQuiz } from "@/services/quizService";
+import { getStoredWeeklyQuiz, getWeeklyQuizKey } from "@/services/quizService";
 import { QuizGenerationOutput } from "@/lib/schemas";
 import { motion } from "framer-motion";
 import {
@@ -54,9 +54,10 @@ export default function WeeklyQuizPage() {
   const kstDate = getKSTDate();
 
   useEffect(() => {
-    getWeeklyQuiz().then(data => {
-      setQuestions(data);
-      questionsRef.current = data;
+    getStoredWeeklyQuiz().then(data => {
+      const list = data ?? [];
+      setQuestions(list);
+      questionsRef.current = list;
       setLoading(false);
     });
   }, []);
@@ -101,13 +102,15 @@ export default function WeeklyQuizPage() {
   if (questions.length === 0) return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background px-6 text-center gap-6">
       <CalendarDays className="w-16 h-16 text-muted-foreground" />
-      <h2 className="text-2xl font-black">이번 주 퀴즈가 없습니다</h2>
-      <p className="text-muted-foreground">최근 7일간 생성된 퀴즈가 없습니다.</p>
+      <h2 className="text-2xl font-black">Weekly Quiz 준비 중</h2>
+      <p className="text-muted-foreground">지난주 퀴즈가 아직 생성되지 않았습니다.<br />매주 월요일에 자동으로 생성됩니다.</p>
       <button onClick={() => router.push("/")} className="bg-primary text-white px-8 py-4 rounded-2xl font-black flex items-center gap-2">
         <Home className="w-5 h-5" /> 메인으로
       </button>
     </div>
   );
+
+  const weekKey = getWeeklyQuizKey();
 
   // READY
   if (gameState === "READY") return (
@@ -117,8 +120,8 @@ export default function WeeklyQuizPage() {
           <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest mb-5">
             <CalendarDays className="w-4 h-4" /> Weekly Quiz
           </div>
-          <h1 className="text-4xl font-black mb-1 tracking-tighter">위클리 퀴즈</h1>
-          <p className="text-muted-foreground font-medium mb-6">최근 7일간의 뉴스 퀴즈 모음</p>
+          <h1 className="text-4xl font-black mb-1 tracking-tighter">Weekly Quiz</h1>
+          <p className="text-muted-foreground font-medium mb-6">{weekKey} 주간 뉴스 퀴즈 모음</p>
           <div className="grid grid-cols-2 gap-3 mb-6 text-left">
             <div className="bg-muted/50 p-4 rounded-2xl border border-border">
               <p className="text-[10px] font-black text-muted-foreground uppercase mb-1">문제 수</p>
@@ -126,11 +129,11 @@ export default function WeeklyQuizPage() {
             </div>
             <div className="bg-muted/50 p-4 rounded-2xl border border-border">
               <p className="text-[10px] font-black text-muted-foreground uppercase mb-1">기간</p>
-              <p className="text-lg font-black text-primary">최근 7일</p>
+              <p className="text-sm font-black text-primary">지난주 Daily</p>
             </div>
           </div>
           <div className="bg-muted/30 rounded-2xl px-4 py-3 mb-6 text-xs text-muted-foreground font-medium">
-            랭킹 반영 없음 · 연습 모드
+            랭킹 반영 없음 · Practice Mode
           </div>
           <motion.button
             whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}

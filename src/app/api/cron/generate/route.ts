@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCategoryCounts, getUsedUrls, saveQuizToFirestore } from "@/services/quizService";
+import { getCategoryCounts, getUsedUrls, saveQuizToFirestore, generateAndSaveWeeklyQuiz, generateAndSaveMonthlyQuiz, getWeeklyQuizKey, getMonthlyQuizKey } from "@/services/quizService";
 import { fetchNewsByCategory, NewsCategory } from "@/services/rssService";
 import { generateQuizFromNews } from "@/services/aiService";
+import { db } from "@/lib/firebase";
+import { doc, getDoc } from "firebase/firestore";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300; // Vercel 최대 5분
@@ -23,6 +25,37 @@ export async function GET(req: NextRequest) {
 
   try {
     console.log("[Cron] Starting daily quiz generation — KST 06:00");
+
+    // ── 주기별 퀴즈 자동 생성 (월요일 = Weekly, 1일 = Monthly) ──────────────
+    const kstNow = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
+    const isMonday = kstNow.getDay() === 1;
+    const isFirstOfMonth = kstNow.getDate() === 1;
+
+    if (isMonday) {
+      const weekKey = getWeeklyQuizKey();
+      const weekSnap = await getDoc(doc(db, "periodic_quizzes", `weekly_${weekKey}`));
+      if (!weekSnap.exists()) {
+        try {
+          const r = await generateAndSaveWeeklyQuiz();
+          console.log(`[Cron] Weekly quiz generated: ${r.count} questions (${r.key})`);
+        } catch (e) {
+          console.error("[Cron] Weekly generation failed:", e);
+        }
+      }
+    }
+
+    if (isFirstOfMonth) {
+      const monthKey = getMonthlyQuizKey();
+      const monthSnap = await getDoc(doc(db, "periodic_quizzes", `monthly_${monthKey}`));
+      if (!monthSnap.exists()) {
+        try {
+          const r = await generateAndSaveMonthlyQuiz();
+          console.log(`[Cron] Monthly quiz generated: ${r.count} questions (${r.key})`);
+        } catch (e) {
+          console.error("[Cron] Monthly generation failed:", e);
+        }
+      }
+    }
 
     const [currentCounts, usedUrls] = await Promise.all([
       getCategoryCounts(),

@@ -8,7 +8,7 @@ import { QuizGenerationOutput } from "@/lib/schemas";
 import { useAuth } from "@/hooks/useAuth";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Save, AlertCircle, PlusCircle, CheckCircle, Zap, Search, Trash2, ListChecks, ExternalLink, Bot, RefreshCw, CheckCircle2, XCircle, Newspaper, ChevronRight, Eye, EyeOff, BarChart2, Calendar, ChevronDown } from "lucide-react";
+import { Save, AlertCircle, PlusCircle, CheckCircle, Zap, Search, Trash2, ListChecks, ExternalLink, Bot, RefreshCw, CheckCircle2, XCircle, Newspaper, ChevronRight, Eye, EyeOff, BarChart2, Calendar, CalendarDays, ChevronDown } from "lucide-react";
 import { doc, onSnapshot } from "firebase/firestore";
 import { getGlobalStats, GlobalStats } from "@/services/scoreService";
 import { getQuizDataByDate } from "@/services/quizService";
@@ -175,6 +175,29 @@ export default function AdminQuizPage() {
       alert("자동 채우기 중 오류가 발생했습니다.");
     } finally {
       setAutoFillLoading(false);
+    }
+  };
+
+  // 주기별 퀴즈 생성
+  const [periodicLoading, setPeriodicLoading] = useState<"weekly" | "monthly" | "both" | null>(null);
+  const [periodicResult, setPeriodicResult] = useState<any>(null);
+
+  const handleGeneratePeriodic = async (type: "weekly" | "monthly" | "both") => {
+    if (!confirm(`${type === "weekly" ? "Weekly" : type === "monthly" ? "Monthly" : "Weekly + Monthly"} 퀴즈를 생성하시겠습니까?\n(지난주/지난달 데일리 퀴즈에서 20문제 추출)`)) return;
+    setPeriodicLoading(type);
+    setPeriodicResult(null);
+    try {
+      const res = await fetch("/api/admin/generate-periodic", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type }),
+      });
+      const data = await res.json();
+      setPeriodicResult(data);
+    } catch (e) {
+      alert("생성 중 오류가 발생했습니다.");
+    } finally {
+      setPeriodicLoading(null);
     }
   };
 
@@ -436,6 +459,43 @@ export default function AdminQuizPage() {
                 </div>
               </>
             )}
+          </div>
+        )}
+      </section>
+
+      {/* ── 주기별 퀴즈 생성 ── */}
+      <section className="bg-card border border-border rounded-[32px] p-8 mb-8">
+        <h2 className="text-lg font-black flex items-center gap-2 mb-2">
+          <CalendarDays className="w-5 h-5 text-primary" /> Weekly / Monthly 퀴즈 생성
+        </h2>
+        <p className="text-xs text-muted-foreground mb-5">
+          크론이 매주 월요일(Weekly), 매월 1일(Monthly) 자동 실행합니다. 수동으로 즉시 생성할 수도 있습니다.
+        </p>
+        <div className="flex flex-wrap gap-3">
+          {(["weekly", "monthly", "both"] as const).map(type => (
+            <button
+              key={type}
+              onClick={() => handleGeneratePeriodic(type)}
+              disabled={periodicLoading !== null}
+              className="bg-primary/10 text-primary border border-primary/30 px-6 py-3 rounded-2xl font-black text-sm hover:bg-primary/20 transition-colors disabled:opacity-50 flex items-center gap-2"
+            >
+              {periodicLoading === type
+                ? <><RefreshCw className="w-4 h-4 animate-spin" /> 생성 중...</>
+                : type === "weekly" ? "Weekly 생성"
+                : type === "monthly" ? "Monthly 생성"
+                : "Weekly + Monthly 모두 생성"}
+            </button>
+          ))}
+        </div>
+        {periodicResult && (
+          <div className="mt-4 bg-muted/30 rounded-2xl p-4 text-xs font-bold space-y-1">
+            {periodicResult.results?.weekly && (
+              <p className="text-accent">✓ Weekly: {periodicResult.results.weekly.count}문제 생성 ({periodicResult.results.weekly.key})</p>
+            )}
+            {periodicResult.results?.monthly && (
+              <p className="text-accent">✓ Monthly: {periodicResult.results.monthly.count}문제 생성 ({periodicResult.results.monthly.key})</p>
+            )}
+            {periodicResult.error && <p className="text-destructive">오류: {periodicResult.error}</p>}
           </div>
         )}
       </section>

@@ -7,10 +7,10 @@ import { CategoryCard } from "@/components/dashboard/CategoryCard";
 import {
   Trophy, MapPin, Hash, Smartphone, Tv, Globe, Microscope,
   Plane, Music, User, Sword, LogOut, Landmark, Sun, Moon, LogIn, UserPlus,
-  CalendarDays, CalendarRange,
+  CalendarDays, CalendarRange, Zap,
 } from "lucide-react";
 import { logout } from "@/services/authService";
-import { getCategoryCounts, getTodayQuizSummary } from "@/services/quizService";
+import { getCategoryCounts, getTodayQuizSummary, checkPeriodicQuizExists } from "@/services/quizService";
 import { subscribeDailyBattle, BattleScore } from "@/services/scoreService";
 import { useState, useEffect, useRef } from "react";
 import { useTheme } from "@/components/ThemeProvider";
@@ -22,6 +22,7 @@ export default function Dashboard() {
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [quizSummary, setQuizSummary] = useState<{ date: string; totalCount: number; categoryCount: number } | null>(null);
   const [battleScores, setBattleScores] = useState<BattleScore[]>([]);
+  const [periodicExists, setPeriodicExists] = useState<{ weekly: boolean; monthly: boolean }>({ weekly: false, monthly: false });
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -34,12 +35,14 @@ export default function Dashboard() {
 
   useEffect(() => {
     const fetchCounts = async () => {
-      const [data, summary] = await Promise.all([
+      const [data, summary, periodic] = await Promise.all([
         getCategoryCounts(),
         getTodayQuizSummary(),
+        checkPeriodicQuizExists(),
       ]);
       setCounts(data);
       if (summary.totalCount > 0) setQuizSummary(summary);
+      setPeriodicExists(periodic);
     };
     fetchCounts();
 
@@ -203,43 +206,54 @@ export default function Dashboard() {
         </motion.section>
       )}
 
-      {/* Hero — Daily Quiz */}
+      {/* Hero — Quiz Hub */}
       <section className="relative overflow-hidden mb-12 rounded-[32px] bg-gradient-to-br from-primary to-primary/60 p-8 text-white">
         <div className="relative z-10">
           <div className="inline-flex items-center gap-2 bg-white/20 backdrop-blur-md px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider mb-4">
             <Sword className="w-4 h-4" />
-            Daily Quiz
+            Quiz Hub
           </div>
-          <h2 className="text-4xl font-black mb-2 leading-tight">데일리 퀴즈</h2>
+          <h2 className="text-4xl font-black mb-2 leading-tight">Daily Quiz</h2>
           <p className="text-white/80 max-w-md mb-6 font-medium">
             어제의 뉴스를 오늘의 퀴즈로 — 전 분야 20문제로 오늘의 1위를 가려보세요.
           </p>
-          <div className="flex flex-wrap gap-3">
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={handleDailyQuiz}
-              className="bg-white text-primary font-bold px-8 py-3 rounded-2xl shadow-xl shadow-primary/20"
-            >
-              {user ? "대결 시작하기" : "로그인하고 시작하기"}
-            </motion.button>
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => router.push("/quiz/weekly")}
-              className="bg-white/20 backdrop-blur-sm text-white font-bold px-5 py-3 rounded-2xl border border-white/30 flex items-center gap-2"
-            >
-              <CalendarDays className="w-4 h-4" /> 위클리
-            </motion.button>
-            <motion.button
-              whileHover={{ scale: 1.05 }}
-              whileTap={{ scale: 0.95 }}
-              onClick={() => router.push("/quiz/monthly")}
-              className="bg-white/20 backdrop-blur-sm text-white font-bold px-5 py-3 rounded-2xl border border-white/30 flex items-center gap-2"
-            >
-              <CalendarRange className="w-4 h-4" /> 먼스리
-            </motion.button>
-          </div>
+
+          {/* Daily 버튼 (풀너비) */}
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={handleDailyQuiz}
+            className="w-full bg-white text-primary font-black px-8 py-4 rounded-2xl shadow-xl shadow-primary/20 flex items-center justify-center gap-2 text-lg mb-3"
+          >
+            <Zap className="w-5 h-5 fill-primary" />
+            {user ? "Daily — 대결 시작하기" : "Daily — 로그인하고 시작하기"}
+          </motion.button>
+
+          {/* Weekly / Monthly (생성된 경우에만 표시) */}
+          {(periodicExists.weekly || periodicExists.monthly) && (
+            <div className="flex gap-3">
+              {periodicExists.weekly && (
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => router.push("/quiz/weekly")}
+                  className="flex-1 bg-white/20 backdrop-blur-sm text-white font-bold py-3 rounded-2xl border border-white/30 flex items-center justify-center gap-2"
+                >
+                  <CalendarDays className="w-4 h-4" /> Weekly
+                </motion.button>
+              )}
+              {periodicExists.monthly && (
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => router.push("/quiz/monthly")}
+                  className="flex-1 bg-white/20 backdrop-blur-sm text-white font-bold py-3 rounded-2xl border border-white/30 flex items-center justify-center gap-2"
+                >
+                  <CalendarRange className="w-4 h-4" /> Monthly
+                </motion.button>
+              )}
+            </div>
+          )}
         </div>
         <div className="absolute right-0 top-0 w-64 h-64 bg-white/10 rounded-full -mr-20 -mt-20 blur-3xl" />
         <div className="absolute right-20 bottom-0 w-32 h-32 bg-accent/20 rounded-full -mb-10 blur-2xl" />
