@@ -9,7 +9,7 @@ import {
   Plane, Music, User, Sword, LogOut, Landmark, Sun, Moon, LogIn, UserPlus,
 } from "lucide-react";
 import { logout } from "@/services/authService";
-import { getCategoryCounts } from "@/services/quizService";
+import { getCategoryCounts, getTodayQuizSummary } from "@/services/quizService";
 import { useState, useEffect, useRef } from "react";
 import { useTheme } from "@/components/ThemeProvider";
 
@@ -18,6 +18,7 @@ export default function Dashboard() {
   const router = useRouter();
   const { theme, toggleTheme } = useTheme();
   const [counts, setCounts] = useState<Record<string, number>>({});
+  const [quizSummary, setQuizSummary] = useState<{ date: string; totalCount: number; categoryCount: number } | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -30,8 +31,12 @@ export default function Dashboard() {
 
   useEffect(() => {
     const fetchCounts = async () => {
-      const data = await getCategoryCounts();
+      const [data, summary] = await Promise.all([
+        getCategoryCounts(),
+        getTodayQuizSummary(),
+      ]);
       setCounts(data);
+      if (summary.totalCount > 0) setQuizSummary(summary);
     };
     fetchCounts();
   }, []);
@@ -171,6 +176,23 @@ export default function Dashboard() {
           )}
         </div>
       </section>
+
+      {/* 퀴즈 업데이트 배너 */}
+      {quizSummary && (
+        <motion.section
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-6 flex items-center gap-3 bg-accent/10 border border-accent/30 rounded-2xl px-5 py-3"
+        >
+          <span className="w-2 h-2 rounded-full bg-accent animate-pulse shrink-0" />
+          <p className="text-sm font-bold text-accent">
+            {quizSummary.date.replace(/-/g, ".")} 퀴즈 업데이트 완료
+          </p>
+          <span className="ml-auto text-xs font-black text-accent/70 bg-accent/10 px-3 py-1 rounded-full">
+            {quizSummary.categoryCount}개 분야 · {quizSummary.totalCount}문제
+          </span>
+        </motion.section>
+      )}
 
       {/* Hero — Daily Quiz */}
       <section className="relative overflow-hidden mb-12 rounded-[32px] bg-gradient-to-br from-primary to-primary/60 p-8 text-white">

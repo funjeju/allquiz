@@ -8,9 +8,10 @@ import { QuizGenerationOutput } from "@/lib/schemas";
 import { useAuth } from "@/hooks/useAuth";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
-import { Save, AlertCircle, PlusCircle, CheckCircle, Zap, Search, Trash2, ListChecks, Gamepad2, ExternalLink, Bot, RefreshCw, CheckCircle2, XCircle, Newspaper, ChevronRight, Eye, EyeOff } from "lucide-react";
-import { doc, getDoc, onSnapshot } from "firebase/firestore";
-import { format } from "date-fns";
+import { Save, AlertCircle, PlusCircle, CheckCircle, Zap, Search, Trash2, ListChecks, ExternalLink, Bot, RefreshCw, CheckCircle2, XCircle, Newspaper, ChevronRight, Eye, EyeOff, BarChart2, Calendar, ChevronDown } from "lucide-react";
+import { doc, onSnapshot } from "firebase/firestore";
+import { getGlobalStats, GlobalStats } from "@/services/scoreService";
+import { getQuizDataByDate } from "@/services/quizService";
 
 export default function AdminQuizPage() {
   const { user } = useAuth();
@@ -40,6 +41,30 @@ export default function AdminQuizPage() {
     setCounts(data);
   };
 
+  const fetchGlobalStats = async () => {
+    setStatsLoading(true);
+    try {
+      const stats = await getGlobalStats();
+      setGlobalStats(stats);
+    } finally {
+      setStatsLoading(false);
+    }
+  };
+
+  const handleDateSearch = async () => {
+    if (!selectedDate) return;
+    setDateLoading(true);
+    setDateQuizData(null);
+    setExpandedDateCat(null);
+    setExpandedDateQuizIdx(null);
+    try {
+      const result = await getQuizDataByDate(selectedDate);
+      setDateQuizData(result);
+    } finally {
+      setDateLoading(false);
+    }
+  };
+
   useEffect(() => {
     // KST 날짜 (Asia/Seoul)
     const kstDate = new Intl.DateTimeFormat("en-CA", {
@@ -50,6 +75,7 @@ export default function AdminQuizPage() {
     }).format(new Date());
 
     fetchCurrentStatus();
+    fetchGlobalStats();
 
     // 실시간 리스너 연결
     const unsubscribe = onSnapshot(doc(db, "daily_quizzes", kstDate), (docSnap) => {
@@ -151,6 +177,17 @@ export default function AdminQuizPage() {
       setAutoFillLoading(false);
     }
   };
+
+  // 글로벌 통계
+  const [globalStats, setGlobalStats] = useState<GlobalStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
+
+  // 날짜별 퀴즈 조회
+  const [selectedDate, setSelectedDate] = useState("");
+  const [dateQuizData, setDateQuizData] = useState<{ data: Record<string, any[]>; totalCount: number } | null>(null);
+  const [dateLoading, setDateLoading] = useState(false);
+  const [expandedDateCat, setExpandedDateCat] = useState<string | null>(null);
+  const [expandedDateQuizIdx, setExpandedDateQuizIdx] = useState<string | null>(null);
 
   // automation state
   const [rssList, setRssList] = useState<any[]>([]);
@@ -263,6 +300,145 @@ export default function AdminQuizPage() {
 
   return (
     <div className="flex-1 max-w-5xl mx-auto w-full px-6 py-12">
+
+      {/* ── 글로벌 통계 카드 ── */}
+      <section className="mb-8">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-black flex items-center gap-2">
+            <BarChart2 className="w-5 h-5 text-primary" /> 대시보드 통계
+          </h2>
+          <button
+            onClick={fetchGlobalStats}
+            disabled={statsLoading}
+            className="text-xs font-bold text-muted-foreground hover:text-primary flex items-center gap-1"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${statsLoading ? "animate-spin" : ""}`} />
+            새로고침
+          </button>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[
+            { label: "전체 유저수", value: globalStats?.totalUsers, suffix: "명", color: "text-primary" },
+            { label: "누적 게임수", value: globalStats?.totalGames, suffix: "판", color: "text-accent" },
+            { label: "오늘 참여자", value: globalStats?.todayParticipants, suffix: "명", color: "text-secondary" },
+            { label: "오늘 배틀 참여", value: globalStats?.todayBattleGames, suffix: "명", color: "text-primary" },
+          ].map(({ label, value, suffix, color }) => (
+            <div key={label} className="bg-card border border-border rounded-3xl p-5">
+              <p className="text-[10px] font-black text-muted-foreground uppercase mb-2">{label}</p>
+              <p className={`text-3xl font-black ${color}`}>
+                {statsLoading ? <span className="animate-pulse">—</span> : (value ?? 0).toLocaleString()}
+                <span className="text-sm font-bold ml-1">{suffix}</span>
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* ── 날짜별 퀴즈 데이터 조회 ── */}
+      <section className="bg-card border border-border rounded-[32px] p-8 mb-8">
+        <h2 className="text-lg font-black flex items-center gap-2 mb-5">
+          <Calendar className="w-5 h-5 text-primary" /> 날짜별 퀴즈 데이터 조회
+        </h2>
+        <div className="flex gap-3 mb-6">
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={e => setSelectedDate(e.target.value)}
+            className="flex-1 bg-background border border-border rounded-2xl px-4 py-3 text-sm font-bold focus:outline-none focus:border-primary"
+          />
+          <button
+            onClick={handleDateSearch}
+            disabled={!selectedDate || dateLoading}
+            className="bg-primary text-white px-6 py-3 rounded-2xl font-black text-sm disabled:opacity-50 flex items-center gap-2"
+          >
+            {dateLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+            조회
+          </button>
+        </div>
+
+        {dateQuizData && (
+          <div>
+            {dateQuizData.totalCount === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">해당 날짜의 퀴즈 데이터가 없습니다.</p>
+            ) : (
+              <>
+                <p className="text-xs font-black text-muted-foreground mb-4">
+                  {selectedDate} · {Object.keys(dateQuizData.data).length}개 카테고리 · 총 {dateQuizData.totalCount}문제
+                </p>
+                <div className="space-y-2">
+                  {Object.entries(dateQuizData.data).map(([cat, quizzes]) => (
+                    <div key={cat} className="border border-border rounded-2xl overflow-hidden">
+                      <button
+                        onClick={() => setExpandedDateCat(expandedDateCat === cat ? null : cat)}
+                        className="w-full flex items-center justify-between px-5 py-3 bg-muted/30 hover:bg-muted/60 transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-xs font-black bg-primary text-white px-2.5 py-1 rounded-lg uppercase">{cat}</span>
+                          <span className="text-sm font-bold">{quizzes.length}문제</span>
+                        </div>
+                        <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${expandedDateCat === cat ? "rotate-180" : ""}`} />
+                      </button>
+                      {expandedDateCat === cat && (
+                        <div className="divide-y divide-border/50">
+                          {quizzes.map((q: any, i: number) => {
+                            const key = `date-${cat}-${i}`;
+                            const isOpen = expandedDateQuizIdx === key;
+                            return (
+                              <div key={i} className="px-5 py-3">
+                                <button
+                                  onClick={() => setExpandedDateQuizIdx(isOpen ? null : key)}
+                                  className="w-full flex items-start justify-between gap-4 text-left"
+                                >
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-xs text-muted-foreground font-bold truncate mb-0.5">{q.base_fact}</p>
+                                    <p className="text-sm font-bold truncate">{q.quizzes?.adult?.question || q.quizzes?.teen?.question}</p>
+                                  </div>
+                                  {isOpen ? <EyeOff className="w-4 h-4 text-muted-foreground shrink-0 mt-1" /> : <Eye className="w-4 h-4 text-muted-foreground shrink-0 mt-1" />}
+                                </button>
+                                {isOpen && (
+                                  <motion.div
+                                    initial={{ opacity: 0, height: 0 }}
+                                    animate={{ opacity: 1, height: "auto" }}
+                                    className="mt-4 space-y-3"
+                                  >
+                                    {(["teen", "adult"] as const).map(level => {
+                                      const quiz = q.quizzes?.[level];
+                                      if (!quiz) return null;
+                                      return (
+                                        <div key={level} className="bg-muted/30 rounded-2xl p-4">
+                                          <span className="text-[10px] font-black uppercase text-primary block mb-2">{level}</span>
+                                          <p className="text-sm font-bold mb-2">{quiz.question}</p>
+                                          <div className="space-y-1">
+                                            {quiz.options?.map((opt: string, oi: number) => (
+                                              <div key={oi} className={`text-xs px-3 py-1.5 rounded-xl font-medium ${opt === quiz.answer ? "bg-accent/20 text-accent font-black" : "bg-card border border-border"}`}>
+                                                {opt === quiz.answer && "✓ "}{opt}
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                    {q.source_url && (
+                                      <a href={q.source_url} target="_blank" rel="noopener noreferrer"
+                                        className="text-[10px] text-primary hover:underline flex items-center gap-1 font-bold">
+                                        <ExternalLink className="w-3 h-3" /> 출처 보기
+                                      </a>
+                                    )}
+                                  </motion.div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        )}
+      </section>
 
       {/* AUTO PILOT — 원클릭 전체 자동 생성 */}
       <section className="bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border-2 border-primary/30 rounded-[48px] p-12 mb-8 shadow-2xl relative overflow-hidden">
@@ -387,7 +563,17 @@ export default function AdminQuizPage() {
                 <ListChecks className="text-primary w-6 h-6" />
                 오늘의 퀴즈 현황
               </h2>
-              <p className="text-xs text-muted-foreground mt-1">총 {publishedQuizzes.length}문제 · 실시간 업데이트</p>
+              <div className="flex items-center gap-3 mt-1.5 flex-wrap">
+                <p className="text-xs text-muted-foreground">
+                  총 {publishedQuizzes.length}문제 · 실시간 업데이트
+                </p>
+                <span className="text-[10px] font-black bg-primary/10 text-primary px-2.5 py-1 rounded-full">
+                  오늘 {new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", month: "long", day: "numeric", weekday: "short" }).format(new Date())}
+                </span>
+                <span className="text-[10px] font-black bg-muted text-muted-foreground px-2.5 py-1 rounded-full">
+                  뉴스 기준 {new Intl.DateTimeFormat("ko-KR", { timeZone: "Asia/Seoul", month: "long", day: "numeric", weekday: "short" }).format(new Date(Date.now() - 86400000))}
+                </span>
+              </div>
             </div>
             <div className="flex flex-wrap gap-2 justify-end">
               {Object.entries(quizzesByCategory).map(([cat, quizzes]) => (

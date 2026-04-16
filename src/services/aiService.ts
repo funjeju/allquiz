@@ -1,6 +1,41 @@
 import { geminiModel } from "@/lib/gemini";
 import { anthropic } from "@/lib/anthropic";
 import { QuizGenerationOutputSchema, QuizGenerationOutput } from "@/lib/schemas";
+import { extractArticleContent } from "./extractionService";
+
+// ─── 카테고리별 심화 가이드라인 ───────────────────────────────────────────
+
+const CATEGORY_GUIDELINES: Record<string, string> = {
+  ENTERTAINMENT: `
+[연예 카테고리 특별 지침]
+- 절대 금지: 기사 제목에서 바로 알 수 있는 질문 (예: "누가 이 드라마에 출연했나요?")
+- 이런 방향으로 출제:
+  * 해당 배우/가수의 이전 작품·수상 이력·데뷔 연도와 연결한 질문
+  * 드라마/영화의 제작사, 감독, 방영 채널 등 주변 정보 활용
+  * 오답 선택지는 비슷한 급의 다른 배우/작품으로 구성해 헷갈리게
+- 목표 난이도: 연예 팬은 알지만 일반인은 찾아봐야 아는 수준`,
+
+  SPORTS: `
+[스포츠 카테고리 특별 지침]
+- 절대 금지: "어느 팀이 이겼나요?", "최종 스코어는?" 같은 결과만 묻는 질문
+- 이런 방향으로 출제:
+  * 해당 선수의 통산 기록, 역대 순위, 특이 기록 관련 질문
+  * 팀 역사, 감독 경력, 리그 맥락을 포함한 질문
+  * 오답은 실제 비슷한 수치·시즌·선수명으로 구성해 스포츠 팬도 헷갈리게
+- 목표 난이도: 중급 스포츠 팬 기준 정답률 50~70%`,
+
+  KPOP: `
+[K-pop 카테고리 특별 지침]
+- 절대 금지: 기사에 그대로 나온 그룹명·곡명을 정답으로 묻는 질문
+- 이런 방향으로 출제:
+  * 멤버 수, 데뷔일, 소속사, 이전 앨범 타이틀 등 구체적 정보 활용
+  * 빌보드/가온차트 순위, 음방 1위 횟수 등 수치 기반 질문
+  * 멤버 개인 활동, 솔로 앨범, 수상 내역 등 팬덤 지식 활용
+- 목표 난이도: 라이트 팬은 헷갈리지만 코어 팬은 아는 수준`,
+};
+
+const getCategoryGuideline = (category: string): string =>
+  CATEGORY_GUIDELINES[category] ?? "";
 
 // ─── STEP 1: Gemini 초안 생성 프롬프트 ─────────────────────────────────────
 
@@ -38,7 +73,8 @@ const GEMINI_SYSTEM_PROMPT = `
 const CLAUDE_REVIEW_PROMPT = (
   articleTitle: string,
   articleContent: string,
-  draftJson: string
+  draftJson: string,
+  category: string
 ) => `
 당신은 퀴즈 품질 검증 전문가입니다.
 아래의 뉴스 기사를 바탕으로 Gemini AI가 생성한 퀴즈 초안을 검증하고 개선해주세요.
@@ -49,7 +85,10 @@ const CLAUDE_REVIEW_PROMPT = (
 
 ## Gemini 초안 (JSON)
 ${draftJson}
-
+${getCategoryGuideline(category) ? `
+## 카테고리 특별 요구사항 (반드시 준수)
+${getCategoryGuideline(category)}
+` : ""}
 ## 검증 및 개선 기준
 1. **정답 검증**: answer 값이 options 배열에 정확히 포함되어 있는지, 실제로 옳은 답인지 확인
 2. **오답 설계**: 나머지 3개 선택지가 그럴듯하지만 명확히 틀린 오답인지 확인. 너무 뻔하거나 무관한 선택지는 개선
@@ -80,7 +119,7 @@ async function reviewWithClaude(
 
   try {
     const draftJson = JSON.stringify(draft, null, 2);
-    const prompt = CLAUDE_REVIEW_PROMPT(articleTitle, articleContent, draftJson);
+    const prompt = CLAUDE_REVIEW_PROMPT(articleTitle, articleContent, draftJson, draft.category);
 
     const message = await anthropic.messages.create({
       model: "claude-sonnet-4-6",
@@ -121,10 +160,13 @@ export async function generateQuizFromText(
   const safeText = (text || "").slice(0, 3000);
   const safeTitle = title || "";
 
+  const categoryGuideline = getCategoryGuideline(category);
+
   const prompt = `
 카테고리: ${category}
 출처: ${sourceUrl}
 ${safeTitle ? `핵심 제목: ${safeTitle}` : ""}
+${categoryGuideline}
 
 [분석 내용]
 ${safeText || "제목 정보만 있습니다. 제목을 바탕으로 퀴즈를 생성해주세요."}
@@ -168,6 +210,26 @@ export async function generateQuizFromNews(
   category: string,
   newsItem: any
 ): Promise<QuizGenerationOutput | null> {
-  const content = newsItem.content || newsItem.contentSnippet || newsItem.title || "";
-  return generateQuizFromText(category, content, newsItem.link, newsItem.title);
+  let title = newsItem.title || "";
+  let content = newsItem.content || newsItem.contentSnippet || "";
+
+  // 기사 본문 직접 추출 시도 (실패 시 RSS snippet으로 fallback)
+  if (newsItem.link) {
+    try {
+      const extracted = await extractArticleContent(newsItem.link);
+      if (extracted?.content && extracted.content.length > 300) {
+        content = extracted.content;
+        if (extracted.title && extracted.title.length > title.length) {
+          title = extracted.title;
+        }
+        console.log(`[Extract] ✓ ${category} 본문 추출 성공 (${content.length}자)`);
+      } else {
+        console.log(`[Extract] 본문 부족, RSS snippet 사용 (${category})`);
+      }
+    } catch {
+      console.log(`[Extract] 추출 실패, RSS snippet 사용 (${category})`);
+    }
+  }
+
+  return generateQuizFromText(category, content || title, newsItem.link, title);
 }

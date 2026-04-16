@@ -176,7 +176,7 @@ export default function QuizPlayPage() {
               </div>
               <div className="bg-muted/50 p-4 rounded-2xl border border-border">
                 <p className="text-[10px] font-black text-muted-foreground uppercase mb-1">획득 포인트</p>
-                <p className="text-2xl font-black text-accent">+{score * 10} pts</p>
+                <p className="text-2xl font-black text-accent">+{calcPoints(score, questions.length)} pts</p>
               </div>
             </div>
 

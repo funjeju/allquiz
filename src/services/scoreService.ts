@@ -1,7 +1,8 @@
 import { db } from "@/lib/firebase";
 import {
   doc, setDoc, getDoc, collection, getDocs,
-  query, orderBy, limit, onSnapshot, updateDoc, increment,
+  query, where, orderBy, limit, onSnapshot, updateDoc, increment,
+  getCountFromServer,
 } from "firebase/firestore";
 
 function getKSTDate() {
@@ -68,13 +69,12 @@ export async function saveQuizResult(result: Omit<QuizResult, "completed_at">) {
 export async function getMyHistory(uid: string): Promise<QuizResult[]> {
   const q = query(
     collection(db, "quiz_results"),
+    where("uid", "==", uid),
     orderBy("completed_at", "desc"),
     limit(100)
   );
   const snap = await getDocs(q);
-  return snap.docs
-    .map(d => d.data() as QuizResult)
-    .filter(r => r.uid === uid);
+  return snap.docs.map(d => d.data() as QuizResult);
 }
 
 // 데일리 배틀 실시간 구독 (onSnapshot)
@@ -89,6 +89,30 @@ export function subscribeDailyBattle(
       callback(snap.docs.map(d => d.data() as BattleScore));
     }
   );
+}
+
+// 어드민 글로벌 통계
+export interface GlobalStats {
+  totalUsers: number;
+  totalGames: number;
+  todayParticipants: number;
+  todayBattleGames: number;
+}
+
+export async function getGlobalStats(): Promise<GlobalStats> {
+  const kstDate = getKSTDate();
+  const [usersSnap, gamesSnap, todaySnap, battleSnap] = await Promise.all([
+    getCountFromServer(collection(db, "users")),
+    getCountFromServer(collection(db, "quiz_results")),
+    getCountFromServer(query(collection(db, "quiz_results"), where("date", "==", kstDate))),
+    getCountFromServer(collection(db, "daily_battles", kstDate, "scores")),
+  ]);
+  return {
+    totalUsers: usersSnap.data().count,
+    totalGames: gamesSnap.data().count,
+    todayParticipants: todaySnap.data().count,
+    todayBattleGames: battleSnap.data().count,
+  };
 }
 
 export interface BattleScore {

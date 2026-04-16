@@ -2,19 +2,32 @@
 
 import { signInWithGoogle } from "@/services/authService";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { Trophy, LogIn } from "lucide-react";
 
 export default function LoginPage() {
   const router = useRouter();
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
   const handleLogin = async () => {
+    if (loading) return;
+    setLoading(true);
+    setError("");
     try {
       await signInWithGoogle();
-      // 로그인 후 온보딩 체크를 위해 이동 (middleware나 layout에서 처리 가능하지만 명시적으로 이동)
       router.push("/");
-    } catch (error) {
-      alert("로그인 중 오류가 발생했습니다.");
+    } catch (e: any) {
+      if (e?.code === "auth/popup-blocked") {
+        setError("팝업이 차단됐습니다. 브라우저 팝업 허용 후 다시 시도해주세요.");
+      } else if (e?.code === "auth/popup-closed-by-user") {
+        // 유저가 직접 닫은 경우 — 에러 메시지 불필요
+      } else {
+        setError("로그인 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.");
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -28,19 +41,26 @@ export default function LoginPage() {
         <div className="w-24 h-24 bg-primary rounded-[2rem] flex items-center justify-center mx-auto mb-8 shadow-2xl shadow-primary/20">
           <Trophy className="w-12 h-12 text-white" />
         </div>
-        
+
         <h1 className="text-4xl font-black mb-4 tracking-tight">RANK & QUIZ</h1>
         <p className="text-muted-foreground mb-12 font-medium">
           매일 새로운 뉴스 퀴즈로 지식을 증명하고<br />
           당신의 마이크로 랭킹을 차지하세요!
         </p>
 
+        {error && (
+          <p className="mb-4 text-sm font-bold text-destructive bg-destructive/10 rounded-2xl px-4 py-3">
+            {error}
+          </p>
+        )}
+
         <button
           onClick={handleLogin}
-          className="w-full bg-white text-black font-bold py-4 rounded-2xl flex items-center justify-center gap-3 shadow-lg hover:shadow-xl transition-all border border-border"
+          disabled={loading}
+          className="w-full bg-white text-black font-bold py-4 rounded-2xl flex items-center justify-center gap-3 shadow-lg hover:shadow-xl transition-all border border-border disabled:opacity-60 disabled:cursor-not-allowed"
         >
           <LogIn className="w-6 h-6" />
-          Google 계정으로 시작하기
+          {loading ? "로그인 중..." : "Google 계정으로 시작하기"}
         </button>
 
         <p className="mt-8 text-xs text-muted-foreground/60 leading-relaxed">

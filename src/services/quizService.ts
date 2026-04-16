@@ -143,6 +143,40 @@ export async function getQuizzesByCategory(category: string): Promise<QuizGenera
   }
 }
 
+// 특정 날짜의 퀴즈 데이터 전체 조회 (어드민용)
+export async function getQuizDataByDate(date: string): Promise<{ data: Record<string, QuizGenerationOutput[]>; totalCount: number }> {
+  const quizDocRef = doc(db, "daily_quizzes", date);
+  try {
+    const docSnap = await getDoc(quizDocRef);
+    if (!docSnap.exists()) return { data: {}, totalCount: 0 };
+
+    const raw = docSnap.data();
+    const data: Record<string, QuizGenerationOutput[]> = {};
+    let totalCount = 0;
+
+    Object.keys(raw).forEach(key => {
+      if (Array.isArray(raw[key])) {
+        data[key] = raw[key];
+        totalCount += raw[key].length;
+      }
+    });
+
+    return { data, totalCount };
+  } catch (error) {
+    console.error("getQuizDataByDate Error:", error);
+    return { data: {}, totalCount: 0 };
+  }
+}
+
+// 오늘 퀴즈 총 문제 수 (메인 배너용)
+export async function getTodayQuizSummary(): Promise<{ date: string; totalCount: number; categoryCount: number }> {
+  const kstDate = getKSTDate();
+  const counts = await getCategoryCounts();
+  const totalCount = Object.values(counts).reduce((s, n) => s + n, 0);
+  const categoryCount = Object.keys(counts).filter(k => counts[k] > 0).length;
+  return { date: kstDate, totalCount, categoryCount };
+}
+
 export async function getUsedUrls(): Promise<string[]> {
   const kstDate = getKSTDate();
   const quizDocRef = doc(db, "daily_quizzes", kstDate);
