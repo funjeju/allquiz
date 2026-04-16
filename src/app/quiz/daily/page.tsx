@@ -1,15 +1,15 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
-import { getDailyQuiz20 } from "@/services/quizService";
+import { getDailyQuiz20, getDailyQuizByDate } from "@/services/quizService";
 import { saveQuizResult, calcPoints, subscribeDailyBattle, BattleScore } from "@/services/scoreService";
 import { QuizGenerationOutput } from "@/lib/schemas";
 import { motion } from "framer-motion";
 import {
   Trophy, Zap, Home, CheckCircle2, XCircle, Calendar,
-  ExternalLink, BookOpen, ChevronDown, ChevronUp, Users, Swords,
+  ExternalLink, BookOpen, ChevronDown, ChevronUp, Users, Swords, History,
 } from "lucide-react";
 import { ReportButton } from "@/components/ReportModal";
 
@@ -40,7 +40,12 @@ type GameState = "READY" | "PLAYING" | "FEEDBACK" | "RESULT" | "REVIEW";
 
 export default function DailyQuizPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, profile } = useAuth();
+
+  // 과거 날짜 모드
+  const pastDate = searchParams.get("date"); // "YYYY-MM-DD" or null
+  const isPastMode = !!pastDate;
 
   const [questions, setQuestions] = useState<QuizItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,12 +69,15 @@ export default function DailyQuizPage() {
   const kstDate = getKSTDate();
 
   useEffect(() => {
-    getDailyQuiz20().then(data => {
+    const fetchFn = isPastMode && pastDate
+      ? getDailyQuizByDate(pastDate)
+      : getDailyQuiz20();
+    fetchFn.then(data => {
       setQuestions(data);
       questionsRef.current = data;
       setLoading(false);
     });
-  }, []);
+  }, [isPastMode, pastDate]);
 
   // 실시간 배틀 랭킹 구독
   useEffect(() => {
@@ -85,7 +93,7 @@ export default function DailyQuizPage() {
   const handleAnswer = (option: string) => {
     if (gameState !== "PLAYING") return;
     const quiz = getQuiz(questionsRef.current[currentRef.current]);
-    const correct = option === quiz.answer;
+    const correct = option.trim() === quiz.answer.trim();
 
     setSelectedOption(option);
     setIsCorrect(correct);
@@ -103,7 +111,7 @@ export default function DailyQuizPage() {
         const total = questionsRef.current.length;
         const pts = calcPoints(finalScore, total);
         setSavedPoints(pts);
-        if (user && profile) {
+        if (user && profile && !isPastMode) {
           saveQuizResult({
             uid: user.uid,
             nickname: profile.nickname,
@@ -151,11 +159,14 @@ export default function DailyQuizPage() {
       <div className="min-h-screen flex flex-col items-center justify-center bg-background p-6">
         <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="max-w-md w-full">
           <div className="bg-card border-2 border-primary/20 p-8 rounded-[48px] shadow-2xl mb-4">
-            <div className="inline-flex items-center gap-2 bg-primary/10 text-primary px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest mb-5">
-              <Calendar className="w-4 h-4" /> {today}
+            <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest mb-5 ${isPastMode ? "bg-muted text-muted-foreground" : "bg-primary/10 text-primary"}`}>
+              {isPastMode ? <History className="w-4 h-4" /> : <Calendar className="w-4 h-4" />}
+              {isPastMode ? `과거 퀴즈 · ${pastDate}` : today}
             </div>
             <h1 className="text-4xl font-black mb-1 tracking-tighter">데일리 퀴즈</h1>
-            <p className="text-muted-foreground font-medium mb-6">어제의 뉴스를 오늘의 퀴즈로</p>
+            <p className="text-muted-foreground font-medium mb-6">
+              {isPastMode ? "과거 날짜 퀴즈 · 랭킹 반영 없음" : "어제의 뉴스를 오늘의 퀴즈로"}
+            </p>
             <div className="grid grid-cols-3 gap-3 mb-6 text-left">
               <div className="bg-muted/50 p-3 rounded-2xl border border-border">
                 <p className="text-[10px] font-black text-muted-foreground uppercase mb-1">문제 수</p>
@@ -179,12 +190,32 @@ export default function DailyQuizPage() {
             </motion.button>
           </div>
 
+          {/* 과거 날짜 선택 */}
+          {!isPastMode && (
+            <div className="bg-card border border-border rounded-3xl p-5 mb-4">
+              <h3 className="text-xs font-black text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
+                <History className="w-3.5 h-3.5" /> 과거 퀴즈 다시 풀기
+              </h3>
+              <div className="flex gap-2">
+                <input
+                  type="date"
+                  max={kstDate}
+                  className="flex-1 bg-background border border-border rounded-2xl px-3 py-2 text-sm font-bold focus:outline-none focus:border-primary"
+                  onChange={e => {
+                    if (e.target.value) router.push(`/quiz/daily?date=${e.target.value}`);
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
           {/* 실시간 배틀 TOP 3 */}
-          {battleScores.length > 0 && (
+          {!isPastMode && battleScores.length > 0 && (
             <div className="bg-card border border-border rounded-3xl p-5">
               <h3 className="text-xs font-black text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-2">
                 <Users className="w-3.5 h-3.5" /> 오늘의 실시간 랭킹
               </h3>
+
               <div className="space-y-2">
                 {battleScores.slice(0, 5).map((s, i) => (
                   <div key={s.uid} className={`flex items-center gap-3 p-2.5 rounded-2xl ${s.uid === user?.uid ? "bg-primary/10 border border-primary/20" : "bg-muted/30"}`}>
@@ -314,8 +345,8 @@ export default function DailyQuizPage() {
                     <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="border-t border-border/50 px-5 pb-5 pt-4 space-y-4">
                       <div className="space-y-2">
                         {quiz.options.map((opt, oi) => (
-                          <div key={oi} className={`text-sm px-4 py-2.5 rounded-2xl font-medium flex items-center gap-2 ${opt === quiz.answer ? "bg-accent/15 text-accent border border-accent/30 font-black" : opt === userAnswer?.selected && !userAnswer?.correct ? "bg-destructive/10 text-destructive border border-destructive/20" : "bg-muted/40 border border-border"}`}>
-                            {opt === quiz.answer && <CheckCircle2 className="w-4 h-4 shrink-0" />}
+                          <div key={oi} className={`text-sm px-4 py-2.5 rounded-2xl font-medium flex items-center gap-2 ${opt.trim() === quiz.answer.trim() ? "bg-accent/15 text-accent border border-accent/30 font-black" : opt === userAnswer?.selected && !userAnswer?.correct ? "bg-destructive/10 text-destructive border border-destructive/20" : "bg-muted/40 border border-border"}`}>
+                            {opt.trim() === quiz.answer.trim() && <CheckCircle2 className="w-4 h-4 shrink-0" />}
                             {opt === userAnswer?.selected && !userAnswer?.correct && <XCircle className="w-4 h-4 shrink-0" />}
                             {opt}
                           </div>

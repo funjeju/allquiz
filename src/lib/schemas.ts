@@ -2,9 +2,12 @@ import { z } from "zod";
 
 export const QuizSchema = z.object({
   question: z.string(),
-  options: z.array(z.string()).length(4),
-  answer: z.string(),
-});
+  options: z.array(z.string().trim()).length(4),
+  answer: z.string().trim(),
+}).refine(
+  (data) => data.options.includes(data.answer),
+  { message: "answer 가 options 안에 없음" }
+);
 
 export const ViralCopySchema = z.object({
   kakao_title: z.string(),

@@ -82,6 +82,64 @@ export async function getCategoryCounts(): Promise<Record<string, number>> {
   }
 }
 
+// 여러 날짜의 퀴즈를 합산해서 반환
+async function getQuizzesFromDates(dates: string[]): Promise<{ quiz: QuizGenerationOutput; category: string }[]> {
+  const snaps = await Promise.all(dates.map(d => getDoc(doc(db, "daily_quizzes", d))));
+  const all: { quiz: QuizGenerationOutput; category: string }[] = [];
+  snaps.forEach(snap => {
+    if (!snap.exists()) return;
+    const data = snap.data();
+    Object.keys(data).forEach(key => {
+      if (Array.isArray(data[key])) {
+        data[key].forEach((q: QuizGenerationOutput) => all.push({ quiz: q, category: key }));
+      }
+    });
+  });
+  return all;
+}
+
+function getKSTDateOffsetted(daysAgo: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - daysAgo);
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+}
+
+// 위클리 퀴즈: 최근 7일 퀴즈에서 35문제
+export async function getWeeklyQuiz(): Promise<{ quiz: QuizGenerationOutput; category: string }[]> {
+  const dates = Array.from({ length: 7 }, (_, i) => getKSTDateOffsetted(i + 1));
+  const all = await getQuizzesFromDates(dates);
+  const shuffled = seededShuffle(all, dates[0]);
+  return shuffled.slice(0, 35);
+}
+
+// 먼스리 퀴즈: 최근 30일 퀴즈에서 60문제
+export async function getMonthlyQuiz(): Promise<{ quiz: QuizGenerationOutput; category: string }[]> {
+  const dates = Array.from({ length: 30 }, (_, i) => getKSTDateOffsetted(i + 1));
+  const all = await getQuizzesFromDates(dates);
+  const shuffled = seededShuffle(all, dates[0]);
+  return shuffled.slice(0, 60);
+}
+
+// 특정 날짜의 데일리 퀴즈 (과거 재플레이용)
+export async function getDailyQuizByDate(date: string): Promise<{ quiz: QuizGenerationOutput; category: string }[]> {
+  const quizDocRef = doc(db, "daily_quizzes", date);
+  try {
+    const docSnap = await getDoc(quizDocRef);
+    if (!docSnap.exists()) return [];
+    const data = docSnap.data();
+    const all: { quiz: QuizGenerationOutput; category: string }[] = [];
+    Object.keys(data).forEach(key => {
+      if (Array.isArray(data[key])) {
+        data[key].forEach((q: QuizGenerationOutput) => all.push({ quiz: q, category: key }));
+      }
+    });
+    return seededShuffle(all, date).slice(0, 20);
+  } catch (error) {
+    console.error("getDailyQuizByDate Error:", error);
+    return [];
+  }
+}
+
 // 날짜 문자열을 시드로 배열을 결정론적으로 셔플 (같은 날 모든 유저에게 동일한 문제)
 function seededShuffle<T>(array: T[], seed: string): T[] {
   const arr = [...array];

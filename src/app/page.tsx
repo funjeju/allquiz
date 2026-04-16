@@ -7,6 +7,7 @@ import { CategoryCard } from "@/components/dashboard/CategoryCard";
 import {
   Trophy, MapPin, Hash, Smartphone, Tv, Globe, Microscope,
   Plane, Music, User, Sword, LogOut, Landmark, Sun, Moon, LogIn, UserPlus,
+  CalendarDays, CalendarRange,
 } from "lucide-react";
 import { logout } from "@/services/authService";
 import { getCategoryCounts, getTodayQuizSummary } from "@/services/quizService";
@@ -205,14 +206,32 @@ export default function Dashboard() {
           <p className="text-white/80 max-w-md mb-6 font-medium">
             어제의 뉴스를 오늘의 퀴즈로 — 전 분야 20문제로 오늘의 1위를 가려보세요.
           </p>
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            onClick={handleDailyQuiz}
-            className="bg-white text-primary font-bold px-8 py-3 rounded-2xl shadow-xl shadow-primary/20"
-          >
-            {user ? "대결 시작하기" : "로그인하고 시작하기"}
-          </motion.button>
+          <div className="flex flex-wrap gap-3">
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={handleDailyQuiz}
+              className="bg-white text-primary font-bold px-8 py-3 rounded-2xl shadow-xl shadow-primary/20"
+            >
+              {user ? "대결 시작하기" : "로그인하고 시작하기"}
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => router.push("/quiz/weekly")}
+              className="bg-white/20 backdrop-blur-sm text-white font-bold px-5 py-3 rounded-2xl border border-white/30 flex items-center gap-2"
+            >
+              <CalendarDays className="w-4 h-4" /> 위클리
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => router.push("/quiz/monthly")}
+              className="bg-white/20 backdrop-blur-sm text-white font-bold px-5 py-3 rounded-2xl border border-white/30 flex items-center gap-2"
+            >
+              <CalendarRange className="w-4 h-4" /> 먼스리
+            </motion.button>
+          </div>
         </div>
         <div className="absolute right-0 top-0 w-64 h-64 bg-white/10 rounded-full -mr-20 -mt-20 blur-3xl" />
         <div className="absolute right-20 bottom-0 w-32 h-32 bg-accent/20 rounded-full -mb-10 blur-2xl" />

@@ -1,16 +1,16 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { QuizGenerationOutput } from "@/lib/schemas";
-import { getQuizzesByCategory } from "@/services/quizService";
+import { getQuizzesByCategory, getQuizDataByDate } from "@/services/quizService";
 import { saveQuizResult, calcPoints } from "@/services/scoreService";
 import { motion } from "framer-motion";
 import {
   Trophy, AlertCircle, Home, Share2, Zap,
   CheckCircle2, XCircle, ExternalLink, BookOpen,
-  ChevronDown, ChevronUp,
+  ChevronDown, ChevronUp, History,
 } from "lucide-react";
 import { ReportButton } from "@/components/ReportModal";
 
@@ -26,7 +26,11 @@ type GameState = "READY" | "PLAYING" | "FEEDBACK" | "RESULT" | "REVIEW";
 export default function QuizPlayPage() {
   const { category } = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, profile } = useAuth();
+
+  const pastDate = searchParams.get("date");
+  const isPastMode = !!pastDate;
 
   const [questions, setQuestions] = useState<QuizGenerationOutput[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,12 +47,15 @@ export default function QuizPlayPage() {
   const scoreRef = useRef(0);
 
   useEffect(() => {
-    getQuizzesByCategory(category as string).then(data => {
+    const fetchFn = isPastMode && pastDate
+      ? getQuizDataByDate(pastDate).then(r => r.data[category as string] ?? [])
+      : getQuizzesByCategory(category as string);
+    fetchFn.then(data => {
       setQuestions(data);
       questionsRef.current = data;
       setLoading(false);
     });
-  }, [category]);
+  }, [category, isPastMode, pastDate]);
 
   const getTargetQuiz = (q: QuizGenerationOutput) => {
     const isTeen = profile?.demographics?.age_range === "10대";
@@ -59,7 +66,7 @@ export default function QuizPlayPage() {
     if (gameState !== "PLAYING") return;
     const q = questionsRef.current[currentRef.current];
     const tq = getTargetQuiz(q);
-    const correct = option === tq.answer;
+    const correct = option.trim() === tq.answer.trim();
 
     setSelectedOption(option);
     setIsCorrect(correct);
@@ -72,7 +79,7 @@ export default function QuizPlayPage() {
       if (nextIdx >= questionsRef.current.length) {
         const finalScore = scoreRef.current;
         const total = questionsRef.current.length;
-        if (user && profile) {
+        if (user && profile && !isPastMode) {
           const kstDate = new Intl.DateTimeFormat("en-CA", {
             timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit",
           }).format(new Date());
@@ -125,7 +132,12 @@ export default function QuizPlayPage() {
         <div className="bg-card border-2 border-primary/20 p-10 rounded-[48px] shadow-2xl">
           <Zap className="w-16 h-16 text-primary mx-auto mb-6" />
           <p className="text-xs font-black text-primary uppercase tracking-[0.3em] mb-2">{catLabel} BATTLE</p>
-          <h2 className="text-3xl font-black mb-8 leading-tight">준비되셨나요?</h2>
+          <h2 className="text-3xl font-black mb-4 leading-tight">준비되셨나요?</h2>
+          {isPastMode && (
+            <div className="flex items-center justify-center gap-2 bg-muted text-muted-foreground text-xs font-black px-4 py-2 rounded-full mb-6">
+              <History className="w-3.5 h-3.5" /> 과거 퀴즈 · {pastDate} · 랭킹 반영 없음
+            </div>
+          )}
           <div className="grid grid-cols-2 gap-3 mb-8 text-left">
             <div className="bg-muted/50 p-4 rounded-2xl border border-border">
               <p className="text-[10px] font-black text-muted-foreground uppercase mb-1">문제 수</p>
@@ -255,13 +267,13 @@ export default function QuizPlayPage() {
                       <div className="space-y-2">
                         {tq.options.map((opt, oi) => (
                           <div key={oi} className={`text-sm px-4 py-2.5 rounded-2xl font-medium flex items-center gap-2 ${
-                            opt === tq.answer
+                            opt.trim() === tq.answer.trim()
                               ? "bg-accent/15 text-accent border border-accent/30 font-black"
                               : opt === userAnswer?.selected && !userAnswer?.correct
                                 ? "bg-destructive/10 text-destructive border border-destructive/20"
                                 : "bg-muted/40 border border-border"
                           }`}>
-                            {opt === tq.answer && <CheckCircle2 className="w-4 h-4 shrink-0" />}
+                            {opt.trim() === tq.answer.trim() && <CheckCircle2 className="w-4 h-4 shrink-0" />}
                             {opt === userAnswer?.selected && !userAnswer?.correct && <XCircle className="w-4 h-4 shrink-0" />}
                             {opt}
                           </div>
