@@ -34,7 +34,6 @@ export default function RootLayout({
         <ThemeProvider>{children}</ThemeProvider>
         <Script
           src="https://t1.kakaocdn.net/kakao_js_sdk/2.7.0/kakao.min.js"
-          integrity="sha384-l68m7Z3oK1cM0Xizv8xGvX74Y6G7W7xY8G7W7xY8G7W7xY8G7W7xY8G7W7xY8G7"
           crossOrigin="anonymous"
           strategy="afterInteractive"
         />

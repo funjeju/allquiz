@@ -81,7 +81,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ message: "Self-healing process completed.", summary: results });
   } catch (error) {
+    const msg = error instanceof Error ? error.message : String(error);
+    const stack = error instanceof Error ? error.stack : undefined;
     console.error("Auto-Fill Critical Error:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    return NextResponse.json({ error: "Internal Server Error", detail: msg, stack }, { status: 500 });
   }
 }

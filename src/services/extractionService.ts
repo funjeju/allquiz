@@ -1,9 +1,3 @@
-import { JSDOM } from "jsdom";
-import { Readability } from "@mozilla/readability";
-
-/**
- * 일반 기사(Article) URL에서 본문 내용을 추출합니다.
- */
 export async function extractArticleContent(url: string) {
   try {
     const response = await fetch(url, {
@@ -16,7 +10,9 @@ export async function extractArticleContent(url: string) {
       signal: AbortSignal.timeout(8000),
     });
     const html = await response.text();
-    
+
+    const { JSDOM } = await import("jsdom");
+    const { Readability } = await import("@mozilla/readability");
     const dom = new JSDOM(html, { url });
     const reader = new Readability(dom.window.document);
     const article = reader.parse();
