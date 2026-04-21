@@ -7,8 +7,9 @@ import { CategoryCard } from "@/components/dashboard/CategoryCard";
 import {
   Trophy, MapPin, Hash, Smartphone, Tv, Globe, Microscope,
   Plane, Music, User, Sword, LogOut, Landmark, Sun, Moon, LogIn, UserPlus,
-  CalendarDays, CalendarRange, Zap,
+  CalendarDays, CalendarRange, Zap, ChevronRight,
 } from "lucide-react";
+import { BottomNav } from "@/components/BottomNav";
 import { logout } from "@/services/authService";
 import { getCategoryCounts, getTodayQuizSummary, checkPeriodicQuizExists } from "@/services/quizService";
 import { subscribeDailyBattle, BattleScore } from "@/services/scoreService";
@@ -100,7 +101,7 @@ export default function Dashboard() {
   );
 
   return (
-    <main className="flex-1 max-w-4xl mx-auto w-full px-6 py-10">
+    <main className="flex-1 max-w-4xl mx-auto w-full px-6 py-10 pb-28">
 
       {/* Header */}
       <section className="flex items-center justify-between mb-12">
@@ -285,16 +286,19 @@ export default function Dashboard() {
         </div>
       </section>
 
-      {/* 실시간 배틀 랭킹 */}
+      {/* 실시간 배틀 랭킹 미리보기 */}
       <section className="bg-muted/50 rounded-3xl p-6 border border-border/50">
         <div className="flex items-center justify-between mb-4">
           <h3 className="font-bold flex items-center gap-2">
             <Trophy className="w-5 h-5 text-secondary" />
-            실시간 인기 배틀
+            실시간 배틀 랭킹
           </h3>
-          <span className="text-xs font-bold text-muted-foreground">
-            {battleScores.length > 0 ? `${battleScores.length}명 참여 중` : "오늘 첫 참여자를 기다리는 중"}
-          </span>
+          <button
+            onClick={() => router.push("/ranking")}
+            className="flex items-center gap-1 text-xs font-black text-primary hover:underline"
+          >
+            전체 보기 <ChevronRight className="w-3.5 h-3.5" />
+          </button>
         </div>
 
         {battleScores.length === 0 ? (
@@ -309,29 +313,39 @@ export default function Dashboard() {
             </button>
           </div>
         ) : (
-          <div className="space-y-3">
-            {battleScores.slice(0, 5).map((s, i) => {
-              const isMe = user && s.uid === user.uid;
-              const rankColor = i === 0 ? "text-yellow-400" : i === 1 ? "text-gray-400" : i === 2 ? "text-amber-600" : "text-muted-foreground/40";
-              return (
-                <div key={s.uid} className={`flex items-center justify-between p-3 rounded-2xl border ${isMe ? "bg-primary/10 border-primary/30" : "bg-card border-border/40"}`}>
-                  <div className="flex items-center gap-3">
-                    <span className={`text-lg font-black w-6 ${rankColor}`}>{i + 1}</span>
-                    <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-primary/20 to-primary/5 border border-primary/20 flex items-center justify-center font-black text-sm text-primary uppercase">
-                      {s.nickname?.[0] || "U"}
+          <>
+            <div className="space-y-3 mb-4">
+              {battleScores.slice(0, 3).map((s, i) => {
+                const isMe = user && s.uid === user.uid;
+                const rankColor = i === 0 ? "text-yellow-400" : i === 1 ? "text-gray-400" : "text-amber-600";
+                const medals = ["🥇", "🥈", "🥉"];
+                return (
+                  <div key={s.uid} className={`flex items-center justify-between p-3 rounded-2xl border ${isMe ? "bg-primary/10 border-primary/30" : "bg-card border-border/40"}`}>
+                    <div className="flex items-center gap-3">
+                      <span className={`text-lg font-black w-6 ${rankColor}`}>{medals[i]}</span>
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-primary/20 to-primary/5 border border-primary/20 flex items-center justify-center font-black text-sm text-primary uppercase">
+                        {s.nickname?.[0] || "U"}
+                      </div>
+                      <span className="font-bold text-sm">{isMe ? `${s.nickname} (나)` : s.nickname}</span>
                     </div>
-                    <span className="font-bold text-sm">{isMe ? `${s.nickname} (나)` : s.nickname}</span>
+                    <div className="text-right">
+                      <p className="text-primary font-black text-sm">{s.score}/{s.total}</p>
+                      <p className="text-xs text-muted-foreground">{s.pct}%</p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-primary font-black text-sm">{s.score}/{s.total}</p>
-                    <p className="text-xs text-muted-foreground">{s.pct}%</p>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+            <button
+              onClick={() => router.push("/ranking")}
+              className="w-full bg-card border border-border py-3 rounded-2xl text-sm font-black text-muted-foreground flex items-center justify-center gap-2 hover:border-primary/40 hover:text-primary transition-colors"
+            >
+              <Trophy className="w-4 h-4" /> 연령대 · 지역 · 성별 랭킹 보기 <ChevronRight className="w-4 h-4" />
+            </button>
+          </>
         )}
       </section>
+      <BottomNav />
     </main>
   );
 }

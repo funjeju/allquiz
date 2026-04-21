@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node -e \"const l = require\\('lucide-react'\\); console.log\\('Sunrise' in l, 'Sunset' in l, 'Sun' in l\\)\")"
+    ]
+  }
+}

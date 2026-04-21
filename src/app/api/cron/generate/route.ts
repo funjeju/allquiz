@@ -62,26 +62,41 @@ export async function GET(req: NextRequest) {
       getUsedUrls(),
     ]);
 
+    // 공유 URL 집합: 실행 중 각 카테고리가 URL을 선점해 중복 방지
+    const claimedUrls = new Set<string>(usedUrls);
+
+    // ── Phase 1: 순차적으로 각 카테고리의 뉴스 항목 선점 ──────────────────────
+    type AllocationEntry = { cat: NewsCategory; news: any[] };
+    const allocations: AllocationEntry[] = [];
+
+    for (const cat of CATEGORIES) {
+      const gap = DAILY_TARGET - (currentCounts[cat] || 0);
+      if (gap <= 0) continue;
+
+      const allNews = await fetchNewsByCategory(cat);
+      const freshNews = allNews.filter(n => n.link && !claimedUrls.has(n.link));
+      const targetNews = freshNews.slice(0, gap);
+
+      // URL 선점 (다른 카테고리가 같은 기사를 가져가지 못하도록)
+      targetNews.forEach(n => { if (n.link) claimedUrls.add(n.link); });
+
+      console.log(`[Cron] ${cat}: gap=${gap}, fresh=${freshNews.length}, target=${targetNews.length}`);
+      allocations.push({ cat, news: targetNews });
+    }
+
     const results: any[] = [];
 
-    for (let i = 0; i < CATEGORIES.length; i += CATEGORY_CONCURRENCY) {
-      const batch = CATEGORIES.slice(i, i + CATEGORY_CONCURRENCY);
+    // ── Phase 2: 배치 단위로 병렬 퀴즈 생성 ──────────────────────────────────
+    for (let i = 0; i < allocations.length; i += CATEGORY_CONCURRENCY) {
+      const batch = allocations.slice(i, i + CATEGORY_CONCURRENCY);
       const batchResults = await Promise.allSettled(
-        batch.map(async (cat) => {
-          const gap = DAILY_TARGET - (currentCounts[cat] || 0);
-          if (gap <= 0) return { category: cat, status: "full" };
+        batch.map(async ({ cat, news: targetNews }) => {
+          if (targetNews.length === 0) return { category: cat, status: "no_fresh_news" };
 
-          const allNews = await fetchNewsByCategory(cat);
-          const freshNews = allNews.filter(n => n.link && !usedUrls.includes(n.link));
-          const targetNews = freshNews.slice(0, gap);
-
-          console.log(`[Cron] ${cat}: gap=${gap}, fresh=${freshNews.length}, target=${targetNews.length}`);
-
-          // 카테고리 내 10문제를 5+5로 쪼개서 두 그룹 동시 실행
           const processGroup = async (items: typeof targetNews) => {
             const res = await Promise.allSettled(
-              items.map(async (news) => {
-                const quiz = await generateQuizFromNews(cat, news);
+              items.map(async (newsItem) => {
+                const quiz = await generateQuizFromNews(cat, newsItem);
                 if (quiz) { await saveQuizToFirestore(quiz); return true; }
                 return false;
               })

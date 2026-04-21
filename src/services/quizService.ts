@@ -343,24 +343,33 @@ export async function getTodayQuizSummary(): Promise<{ date: string; totalCount:
   return { date: kstDate, totalCount, categoryCount };
 }
 
-export async function getUsedUrls(): Promise<string[]> {
-  const kstDate = getKSTDate();
-  const quizDocRef = doc(db, "daily_quizzes", kstDate);
+// 최근 N일의 사용된 URL 목록 반환 (중복 방지를 위해 여러 날 체크)
+export async function getUsedUrls(daysBack = 3): Promise<string[]> {
+  const dates = Array.from({ length: daysBack }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Seoul", year: "numeric", month: "2-digit", day: "2-digit" }).format(d);
+  });
 
   try {
-    const docSnap = await getDoc(quizDocRef);
-    if (!docSnap.exists()) return [];
-
-    const data = docSnap.data();
+    const snaps = await Promise.all(dates.map(date => getDoc(doc(db, "daily_quizzes", date))));
     const urls: string[] = [];
+    const seen = new Set<string>();
 
-    Object.keys(data).forEach(key => {
-      const val = data[key];
-      if (Array.isArray(val)) {
-        val.forEach((q: any) => {
-          if (q.source_url) urls.push(q.source_url);
-        });
-      }
+    snaps.forEach(snap => {
+      if (!snap.exists()) return;
+      const data = snap.data();
+      Object.keys(data).forEach(key => {
+        const val = data[key];
+        if (Array.isArray(val)) {
+          val.forEach((q: any) => {
+            if (q.source_url && !seen.has(q.source_url)) {
+              seen.add(q.source_url);
+              urls.push(q.source_url);
+            }
+          });
+        }
+      });
     });
 
     return urls;

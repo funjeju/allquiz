@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { getMyHistory, QuizResult } from "@/services/scoreService";
 import { motion } from "framer-motion";
 import { Trophy, Home, Calendar, TrendingUp, CheckCircle2, XCircle, ChevronLeft } from "lucide-react";
+import { BottomNav } from "@/components/BottomNav";
 
 const CATEGORY_LABEL: Record<string, string> = {
   DAILY: "데일리", NATION: "시사", WORLD: "국제", IT: "IT", AI: "AI",
@@ -207,12 +208,13 @@ export default function MePage() {
           )}
         </div>
 
-        <div className="mt-8">
+        <div className="mt-8 mb-24">
           <button onClick={() => router.push("/")} className="w-full bg-card border border-border py-4 rounded-2xl font-bold flex items-center justify-center gap-2 text-muted-foreground">
             <Home className="w-4 h-4" /> 메인으로
           </button>
         </div>
       </div>
+      <BottomNav />
     </div>
   );
 }

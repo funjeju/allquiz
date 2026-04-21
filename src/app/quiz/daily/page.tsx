@@ -5,6 +5,8 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import { getDailyQuiz20, getDailyQuizByDate } from "@/services/quizService";
 import { saveQuizResult, calcPoints, subscribeDailyBattle, BattleScore } from "@/services/scoreService";
+
+const QUIZ_START_KEY = "daily_quiz_start_time";
 import { QuizGenerationOutput } from "@/lib/schemas";
 import { motion } from "framer-motion";
 import {
@@ -112,16 +114,27 @@ function DailyQuizPageInner() {
         const pts = calcPoints(finalScore, total);
         setSavedPoints(pts);
         if (user && profile && !isPastMode) {
-          saveQuizResult({
-            uid: user.uid,
-            nickname: profile.nickname,
-            date: kstDate,
-            category: "DAILY",
-            score: finalScore,
-            total,
-            pct: Math.round((finalScore / total) * 100),
-            points_earned: pts,
-          });
+          const startTs = parseInt(localStorage.getItem(QUIZ_START_KEY) ?? "0", 10);
+          const timeTaken = startTs > 0 ? Math.round((Date.now() - startTs) / 1000) : undefined;
+          localStorage.removeItem(QUIZ_START_KEY);
+          saveQuizResult(
+            {
+              uid: user.uid,
+              nickname: profile.nickname,
+              date: kstDate,
+              category: "DAILY",
+              score: finalScore,
+              total,
+              pct: Math.round((finalScore / total) * 100),
+              points_earned: pts,
+            },
+            {
+              time_taken_seconds: timeTaken,
+              age_range: profile.demographics?.age_range,
+              region: profile.demographics?.region,
+              gender: profile.demographics?.gender,
+            }
+          );
         }
         setGameState("RESULT");
       } else {
@@ -183,7 +196,10 @@ function DailyQuizPageInner() {
             </div>
             <motion.button
               whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
-              onClick={() => setGameState("PLAYING")}
+              onClick={() => {
+                localStorage.setItem(QUIZ_START_KEY, Date.now().toString());
+                setGameState("PLAYING");
+              }}
               className="w-full bg-primary text-white py-5 rounded-3xl font-black text-xl shadow-2xl shadow-primary/30 flex items-center justify-center gap-2"
             >
               <Swords className="w-5 h-5" /> 대결 시작하기

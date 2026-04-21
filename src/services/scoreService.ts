@@ -15,7 +15,7 @@ export interface QuizResult {
   uid: string;
   nickname: string;
   date: string;
-  category: string;      // "DAILY" or category ID
+  category: string;
   score: number;
   total: number;
   pct: number;
@@ -23,7 +23,6 @@ export interface QuizResult {
   completed_at: string;
 }
 
-// 포인트 계산: 정답당 10pt + 완주 보너스 + 퍼센트 보너스
 export function calcPoints(score: number, total: number): number {
   const base = score * 10;
   const completion = total >= 20 ? 50 : total >= 10 ? 20 : 0;
@@ -31,35 +30,47 @@ export function calcPoints(score: number, total: number): number {
   return base + completion + bonus;
 }
 
-// 퀴즈 결과 저장 + 유저 포인트 누적
-export async function saveQuizResult(result: Omit<QuizResult, "completed_at">) {
+export interface SaveQuizResultOptions {
+  time_taken_seconds?: number;
+  age_range?: string;
+  region?: string;
+  gender?: string;
+}
+
+export async function saveQuizResult(
+  result: Omit<QuizResult, "completed_at">,
+  options: SaveQuizResultOptions = {}
+) {
   const docId = `${result.uid}_${result.date}_${result.category}`;
 
-  // 이미 오늘 이 카테고리를 풀었으면 최고 점수만 갱신
   const ref = doc(db, "quiz_results", docId);
   const snap = await getDoc(ref);
   if (snap.exists() && snap.data().score >= result.score) return;
 
   await setDoc(ref, { ...result, completed_at: new Date().toISOString() });
 
-  // 유저 포인트 누적
   const userRef = doc(db, "users", result.uid);
   await updateDoc(userRef, {
     "inventory.golden_tickets": increment(result.points_earned),
   });
 
-  // 데일리 배틀 랭킹 갱신 (category === "DAILY"일 때만)
   if (result.category === "DAILY") {
+    const battleData: Record<string, unknown> = {
+      uid: result.uid,
+      nickname: result.nickname,
+      score: result.score,
+      total: result.total,
+      pct: result.pct,
+      completed_at: new Date().toISOString(),
+    };
+    if (options.time_taken_seconds != null) battleData.time_taken_seconds = options.time_taken_seconds;
+    if (options.age_range) battleData.age_range = options.age_range;
+    if (options.region) battleData.region = options.region;
+    if (options.gender) battleData.gender = options.gender;
+
     await setDoc(
       doc(db, "daily_battles", result.date, "scores", result.uid),
-      {
-        uid: result.uid,
-        nickname: result.nickname,
-        score: result.score,
-        total: result.total,
-        pct: result.pct,
-        completed_at: new Date().toISOString(),
-      },
+      battleData,
       { merge: true }
     );
   }
@@ -122,4 +133,148 @@ export interface BattleScore {
   total: number;
   pct: number;
   completed_at: string;
+  time_taken_seconds?: number;
+  age_range?: string;
+  region?: string;
+  gender?: string;
+}
+
+export interface CumulativeRank {
+  uid: string;
+  nickname: string;
+  total_points: number;
+}
+
+export interface WeeklyRank {
+  uid: string;
+  nickname: string;
+  weekly_score: number;
+  game_count: number;
+}
+
+export interface DemographicRankings {
+  byAge: Record<string, BattleScore[]>;
+  byRegion: Record<string, BattleScore[]>;
+  byGender: Record<string, BattleScore[]>;
+}
+
+// 오늘 배틀 점수 전체 조회 (클라이언트 정렬용)
+export async function getDailyBattleScores(date: string): Promise<BattleScore[]> {
+  const q = query(
+    collection(db, "daily_battles", date, "scores"),
+    orderBy("score", "desc"),
+    limit(200)
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map(d => d.data() as BattleScore);
+}
+
+// 만점자 Top3 (속도순)
+export async function getPerfectSpeedTop3(date: string): Promise<BattleScore[]> {
+  const scores = await getDailyBattleScores(date);
+  return scores
+    .filter(s => s.score === s.total && s.time_taken_seconds != null)
+    .sort((a, b) => (a.time_taken_seconds ?? 99999) - (b.time_taken_seconds ?? 99999))
+    .slice(0, 3);
+}
+
+// 오늘 종합 Top3 (점수 -> 시간순 tie-break)
+export async function getDailyTop3(date: string): Promise<BattleScore[]> {
+  const scores = await getDailyBattleScores(date);
+  return scores
+    .sort((a, b) => {
+      if (b.score !== a.score) return b.score - a.score;
+      return (a.time_taken_seconds ?? 99999) - (b.time_taken_seconds ?? 99999);
+    })
+    .slice(0, 3);
+}
+
+// 스피드 Top3 (전체, 풀이 시간 기준)
+export async function getSpeedTop3(date: string): Promise<BattleScore[]> {
+  const scores = await getDailyBattleScores(date);
+  return scores
+    .filter(s => s.time_taken_seconds != null)
+    .sort((a, b) => (a.time_taken_seconds ?? 99999) - (b.time_taken_seconds ?? 99999))
+    .slice(0, 3);
+}
+
+// 얼리버드 Top3 (가장 일찍 완료)
+export async function getEarlyBirdTop3(date: string): Promise<BattleScore[]> {
+  const scores = await getDailyBattleScores(date);
+  return scores
+    .sort((a, b) => a.completed_at.localeCompare(b.completed_at))
+    .slice(0, 3);
+}
+
+// 누적 포인트 Top3
+export async function getCumulativeTop3(): Promise<CumulativeRank[]> {
+  const q = query(
+    collection(db, "users"),
+    orderBy("inventory.golden_tickets", "desc"),
+    limit(3)
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map(d => {
+    const data = d.data();
+    return {
+      uid: data.uid,
+      nickname: data.nickname,
+      total_points: data.inventory?.golden_tickets ?? 0,
+    };
+  });
+}
+
+// 이번 주 MVP Top3
+function getKSTWeekStart(): string {
+  const now = new Date();
+  const kst = new Date(now.toLocaleString("en-US", { timeZone: "Asia/Seoul" }));
+  const day = kst.getDay();
+  kst.setDate(kst.getDate() - (day === 0 ? 6 : day - 1));
+  return `${kst.getFullYear()}-${String(kst.getMonth() + 1).padStart(2, "0")}-${String(kst.getDate()).padStart(2, "0")}`;
+}
+
+export async function getWeeklyTop3(): Promise<WeeklyRank[]> {
+  const weekStart = getKSTWeekStart();
+  const q = query(
+    collection(db, "quiz_results"),
+    where("category", "==", "DAILY"),
+    where("date", ">=", weekStart),
+    orderBy("date", "desc"),
+    limit(500)
+  );
+  const snap = await getDocs(q);
+  const map: Record<string, WeeklyRank> = {};
+  snap.docs.forEach(d => {
+    const data = d.data() as QuizResult;
+    if (!map[data.uid]) {
+      map[data.uid] = { uid: data.uid, nickname: data.nickname, weekly_score: 0, game_count: 0 };
+    }
+    map[data.uid].weekly_score += data.score;
+    map[data.uid].game_count += 1;
+  });
+  return Object.values(map)
+    .sort((a, b) => b.weekly_score - a.weekly_score)
+    .slice(0, 3);
+}
+
+// 인구통계별 Top3 그룹 (오늘)
+export async function getDemographicRankings(date: string): Promise<DemographicRankings> {
+  const scores = await getDailyBattleScores(date);
+
+  const groupTop3 = (key: keyof BattleScore): Record<string, BattleScore[]> => {
+    const groups: Record<string, BattleScore[]> = {};
+    scores.forEach(s => {
+      const val = s[key] as string | undefined;
+      if (!val) return;
+      if (!groups[val]) groups[val] = [];
+      if (groups[val].length < 3) groups[val].push(s);
+    });
+    return groups;
+  };
+
+  return {
+    byAge: groupTop3("age_range"),
+    byRegion: groupTop3("region"),
+    byGender: groupTop3("gender"),
+  };
 }
