@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { generateAndSaveDailyCrossword } from "@/services/crosswordService";
 import { getCategoryCounts, getUsedUrls, saveQuizToFirestore, generateAndSaveWeeklyQuiz, generateAndSaveMonthlyQuiz, getWeeklyQuizKey, getMonthlyQuizKey } from "@/services/quizService";
 import { fetchNewsByCategory, NewsCategory } from "@/services/rssService";
 import { generateQuizFromNews } from "@/services/aiService";
@@ -55,6 +56,14 @@ export async function GET(req: NextRequest) {
           console.error("[Cron] Monthly generation failed:", e);
         }
       }
+    }
+
+    // ── 낱말퀴즈 생성 ─────────────────────────────────────────────────────
+    try {
+      const cw = await generateAndSaveDailyCrossword();
+      console.log(`[Cron] Crossword generated: ${cw.words.length} words, ${cw.rows}×${cw.cols}`);
+    } catch (e) {
+      console.error("[Cron] Crossword generation failed:", e);
     }
 
     const [currentCounts, usedUrls] = await Promise.all([

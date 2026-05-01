@@ -1,10 +1,11 @@
 "use client";
 
 import { usePathname, useRouter } from "next/navigation";
-import { Home, Trophy, User } from "lucide-react";
+import { Home, Trophy, User, Newspaper } from "lucide-react";
 
 const TABS = [
   { href: "/", label: "홈", icon: Home },
+  { href: "/crossword", label: "낱말", icon: Newspaper },
   { href: "/ranking", label: "랭킹", icon: Trophy },
   { href: "/me", label: "내 기록", icon: User },
 ];
