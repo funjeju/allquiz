@@ -263,30 +263,31 @@ export function generateCrossword(
     return chars.length >= 2 && chars.length <= 7 && chars.every(c => c >= '가' && c <= '힣');
   });
 
-  if (valid.length < 4) return null;
+  if (valid.length < 3) return null;
 
   const byLen = [...valid].sort((a, b) => [...b.word].length - [...a.word].length);
 
-  // Try multiple orderings and keep the best layout
-  const orderings: WordInput[][] = [
-    byLen,
-    [...byLen].reverse(),
-    shuffle(byLen),
-    shuffle(byLen),
-    shuffle(byLen),
-  ];
-
   let best: { grid: CrosswordCell[][]; placed: PlacedWord[] } | null = null;
 
-  for (const ord of orderings) {
-    const result = runLayout(ord);
-    if (result && (!best || result.placed.length > best.placed.length)) {
-      best = result;
+  // Try every word as the potential first word (different anchors give different intersection opportunities)
+  for (const firstWord of byLen.slice(0, Math.min(byLen.length, 8))) {
+    const rest = byLen.filter(w => w !== firstWord);
+    const orderings: WordInput[][] = [
+      [firstWord, ...rest],
+      [firstWord, ...shuffle(rest)],
+      [firstWord, ...[...rest].reverse()],
+    ];
+    for (const ord of orderings) {
+      const result = runLayout(ord);
+      if (result && (!best || result.placed.length > best.placed.length)) {
+        best = result;
+      }
+      if (best && best.placed.length >= Math.min(valid.length, 10)) break;
     }
-    if (best && best.placed.length >= valid.length) break;
+    if (best && best.placed.length >= Math.min(valid.length, 10)) break;
   }
 
-  if (!best || best.placed.length < 4) return null;
+  if (!best || best.placed.length < 3) return null;
 
   const { grid, words } = trimGrid(best.grid, best.placed);
   assignNumbers(grid, words);

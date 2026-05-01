@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { format } from "date-fns";
 import { ko } from "date-fns/locale";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { ArrowLeft, Loader2, Zap } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { getDailyCrossword } from "@/services/crosswordService";
 import { CrosswordPuzzle, PlacedWord } from "@/lib/crossword";
@@ -36,6 +36,8 @@ export default function CrosswordPage() {
   const [showComplete, setShowComplete] = useState(false);
   const [clueTab, setClueTab] = useState<"across" | "down">("across");
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [generating, setGenerating] = useState(false);
+  const [genError, setGenError] = useState<string | null>(null);
 
   const inputRef = useRef<HTMLInputElement>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -360,6 +362,23 @@ export default function CrosswordPage() {
   }
 
   if (!puzzle) {
+    const isDev = process.env.NODE_ENV === "development";
+
+    const handleGenerate = async () => {
+      setGenerating(true);
+      setGenError(null);
+      try {
+        const res = await fetch("/api/dev/generate-crossword", { method: "POST" });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Generation failed");
+        // Reload page to show the newly generated puzzle
+        window.location.reload();
+      } catch (e) {
+        setGenError(e instanceof Error ? e.message : String(e));
+        setGenerating(false);
+      }
+    };
+
     return (
       <div className="min-h-screen flex flex-col items-center justify-center gap-6 p-6 text-center">
         <div className="text-7xl select-none">📰</div>
@@ -367,6 +386,27 @@ export default function CrosswordPage() {
           <h2 className="text-2xl font-black">오늘의 낱말퀴즈 준비 중</h2>
           <p className="text-muted-foreground text-sm">매일 오전 7시, 주요 뉴스로 새 퀴즈가 올라옵니다.</p>
         </div>
+
+        {isDev && (
+          <div className="flex flex-col items-center gap-2">
+            <button
+              onClick={handleGenerate}
+              disabled={generating}
+              className="flex items-center gap-2 px-6 py-3 bg-accent text-accent-foreground rounded-2xl font-black text-sm shadow-lg shadow-accent/20 disabled:opacity-50"
+            >
+              {generating ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> 생성 중… (30~60초)</>
+              ) : (
+                <><Zap className="w-4 h-4" /> 지금 바로 생성하기 (DEV)</>
+              )}
+            </button>
+            {genError && (
+              <p className="text-xs text-destructive max-w-xs">{genError}</p>
+            )}
+            <p className="text-[10px] text-muted-foreground">개발 환경 전용 버튼 — 프로덕션 미노출</p>
+          </div>
+        )}
+
         <button
           onClick={() => router.back()}
           className="px-6 py-3 bg-primary text-primary-foreground rounded-2xl font-black text-sm shadow-lg shadow-primary/20"
